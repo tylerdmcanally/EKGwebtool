@@ -558,9 +558,14 @@ function detectEcgGrid(image) {
 
   normalizeProfile(xProfile, height);
   normalizeProfile(yProfile, width);
-  const xAxis = estimateGridAxis(xProfile);
-  const yAxis = estimateGridAxis(yProfile);
+  const xPrepared = prepareGridSignal(xProfile);
+  const yPrepared = prepareGridSignal(yProfile);
+  if (!xPrepared || !yPrepared) return null;
+
+  let xAxis = estimateGridAxisFromSignal(xPrepared.signal, xPrepared.total);
+  let yAxis = estimateGridAxisFromSignal(yPrepared.signal, yPrepared.total);
   if (!xAxis || !yAxis) return null;
+  ({ xAxis, yAxis } = harmonizeGridAxes(xAxis, yAxis, xPrepared, yPrepared));
 
   const confidence = Math.min(xAxis.confidence, yAxis.confidence);
   if (confidence < 0.06) return null;
@@ -569,11 +574,11 @@ function detectEcgGrid(image) {
     confidence,
     x: {
       spacing: xAxis.period / scale,
-      origin: xAxis.phase / scale
+      origin: xAxis.majorPhase / scale
     },
     y: {
       spacing: yAxis.period / scale,
-      origin: yAxis.phase / scale
+      origin: yAxis.majorPhase / scale
     }
   };
 }
@@ -596,7 +601,7 @@ function gridPixelScore(r, g, b) {
   const brightness = (r + g + b) / 3;
   const redBias = r - (g + b) / 2;
   const pinkLine = Math.max(0, redBias - 3) * 1.4;
-  const grayLine = max - min < 32 ? Math.max(0, 238 - brightness) * 0.16 : 0;
+  const grayLine = max - min < 32 && brightness > 105 ? Math.max(0, 238 - brightness) * 0.16 : 0;
   return pinkLine + grayLine;
 }
 
@@ -607,12 +612,20 @@ function normalizeProfile(profile, divisor) {
 }
 
 function estimateGridAxis(profile) {
+  const prepared = prepareGridSignal(profile);
+  return prepared ? estimateGridAxisFromSignal(prepared.signal, prepared.total) : null;
+}
+
+function prepareGridSignal(profile) {
   const smoothed = smoothProfile(profile, 1);
   const baseline = quantile(Array.from(smoothed), 0.35);
   const signal = smoothed.map((value) => Math.max(0, value - baseline));
   const total = signal.reduce((sum, value) => sum + value, 0);
   if (total <= 0) return null;
+  return { signal, total };
+}
 
+function estimateGridAxisFromSignal(signal, total) {
   const minPeriod = 4;
   const maxPeriod = Math.min(70, Math.floor(signal.length / 4));
   let best = null;
@@ -632,6 +645,37 @@ function estimateGridAxis(profile) {
   if (fractional && fractional.score >= best.score * 0.92) {
     best = fractional;
   }
+  best.majorPhase = estimateMajorPhase(signal, best.period, best.phase);
+  return best;
+}
+
+function harmonizeGridAxes(xAxis, yAxis, xPrepared, yPrepared) {
+  const ratio = yAxis.period / xAxis.period;
+  if (ratio < 0.65 && ratio > 0.35) {
+    const tuned = estimateGridAxisAtPeriod(yPrepared.signal, yPrepared.total, xAxis.period);
+    if (tuned && tuned.confidence >= yAxis.confidence * 0.65) {
+      yAxis = tuned;
+    }
+  } else if (ratio > 1.55 && ratio < 2.85) {
+    const tuned = estimateGridAxisAtPeriod(xPrepared.signal, xPrepared.total, yAxis.period);
+    if (tuned && tuned.confidence >= xAxis.confidence * 0.65) {
+      xAxis = tuned;
+    }
+  }
+
+  return { xAxis, yAxis };
+}
+
+function estimateGridAxisAtPeriod(signal, total, targetPeriod) {
+  const maxPeriod = Math.min(70, Math.floor(signal.length / 4));
+  const period = clamp(targetPeriod, 4, maxPeriod);
+  const fit = bestPhaseForFractionalPeriod(signal, period, total, 0.05);
+  let best = { period, ...fit };
+  const fractional = refineFractionalPeriod(signal, best, total);
+  if (fractional && fractional.score >= best.score * 0.92) {
+    best = fractional;
+  }
+  best.majorPhase = estimateMajorPhase(signal, best.period, best.phase);
   return best;
 }
 
@@ -681,7 +725,7 @@ function gridFitScore(signal, period, phase, total) {
 
 function refinePeriod(signal, period, phase, total) {
   let best = { period, phase, ...gridFitScore(signal, period, phase, total) };
-  const candidates = [period / 5, period / 2, period * 2, period * 5]
+  const candidates = [period / 5, period * 2, period * 5]
     .map((value) => Math.round(value))
     .filter((value) => value >= 4 && value <= Math.min(70, Math.floor(signal.length / 4)));
 
@@ -744,6 +788,40 @@ function bestPhaseForFractionalPeriod(signal, period, total, step, start = 0, en
 
 function wrapPhase(phase, period) {
   return ((phase % period) + period) % period;
+}
+
+function estimateMajorPhase(signal, period, phase) {
+  const majorPeriod = period * 5;
+  let best = { phase, score: Number.NEGATIVE_INFINITY };
+  for (let offset = 0; offset < 5; offset += 1) {
+    const candidate = phase + offset * period;
+    const score = periodicLineStrength(signal, candidate, majorPeriod, period);
+    if (score > best.score) {
+      best = { phase: candidate, score };
+    }
+  }
+  return wrapPhase(best.phase, majorPeriod);
+}
+
+function periodicLineStrength(signal, phase, period, smallPeriod) {
+  const radius = Math.max(1, Math.round(smallPeriod * 0.12));
+  let sum = 0;
+  let count = 0;
+  let center = phase - Math.ceil(phase / period) * period;
+  while (center < 0) center += period;
+
+  for (; center < signal.length; center += period) {
+    const rounded = Math.round(center);
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const index = rounded + offset;
+      if (index >= 0 && index < signal.length) {
+        sum += signal[index];
+        count += 1;
+      }
+    }
+  }
+
+  return count ? sum / count : 0;
 }
 
 function smoothProfile(profile, radius) {
