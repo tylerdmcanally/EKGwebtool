@@ -19,6 +19,7 @@ const els = {
   gridOpacity: document.getElementById("gridOpacity"),
   showGrid: document.getElementById("showGrid"),
   marchSteps: document.getElementById("marchSteps"),
+  knownTimeMs: document.getElementById("knownTimeMs"),
   highlightType: document.getElementById("highlightType"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
@@ -40,6 +41,7 @@ const colors = {
   march: "#7c3aed",
   amplitude: "#2563eb",
   gridalign: "#be123c",
+  timecal: "#0369a1",
   calibrate: "#111827",
   note: "#374151"
 };
@@ -149,6 +151,7 @@ els.calibrationBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
 els.marchSteps.addEventListener("input", render);
+els.knownTimeMs.addEventListener("input", render);
 els.highlightType.addEventListener("change", render);
 
 els.undoBtn.addEventListener("click", () => {
@@ -213,6 +216,7 @@ function setTool(tool) {
     erase: "not-allowed",
     note: "copy",
     gridalign: "crosshair",
+    timecal: "crosshair",
     calibrate: "crosshair",
     interval: "crosshair",
     rr: "crosshair",
@@ -228,6 +232,7 @@ function statusForTool(tool) {
   const map = {
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
+    timecal: "Enter the known duration, then drag across that time span to calculate paper speed.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
@@ -265,6 +270,10 @@ function numberFromInput(input, fallback) {
 
 function getCalibrationBoxCount() {
   return Math.max(1, Math.round(numberFromInput(els.calibrationBoxes, 5)));
+}
+
+function getKnownTimeMs() {
+  return numberFromInput(els.knownTimeMs, 400);
 }
 
 function loadImageFile(file) {
@@ -695,7 +704,7 @@ function previewAnnotation() {
   }
   return {
     id: 0,
-    kind: active.kind === "calibrate" ? "calibration" : "measure",
+    kind: active.kind === "calibrate" || active.kind === "timecal" ? "calibration" : "measure",
     type: active.kind,
     start: active.start,
     end: active.end,
@@ -785,6 +794,8 @@ function onPointerUp(event) {
 
   if (active.kind === "gridalign") {
     applyGridAlignment(active.start, active.end);
+  } else if (active.kind === "timecal") {
+    applyTimeCalibration(active.start, active.end);
   } else if (active.kind === "calibrate") {
     applyCalibration(active.start, active.end);
   } else if (active.kind === "highlight") {
@@ -871,6 +882,31 @@ function applyGridAlignment(start, end) {
   state.calibration.originX = rect.x;
   state.calibration.originY = rect.y;
   setStatus(`Grid aligned: ${round(pxX, 2)} px/time box, ${round(pxY, 2)} px/voltage box across ${boxes} boxes.`);
+}
+
+function applyTimeCalibration(start, end) {
+  const data = timeCalibrationData({ start, end });
+  if (!Number.isFinite(data.paperSpeed) || data.smallBoxes < 0.5) {
+    setStatus("Time span was too short to calculate paper speed.");
+    return;
+  }
+
+  setPaperSpeed(data.paperSpeed);
+  const largeBoxes = data.smallBoxes / 5;
+  const msPerLarge = largeBoxes > 0 ? data.knownMs / largeBoxes : 0;
+  setStatus(`Time calibrated: ${round(data.knownMs, 0)} ms across ${round(data.smallBoxes, 2)} small boxes = ${round(data.paperSpeed, 2)} mm/s (${round(msPerLarge, 1)} ms/large box).`);
+}
+
+function setPaperSpeed(speed) {
+  const commonSpeed = [25, 50].find((value) => Math.abs(value - speed) <= 0.5);
+  if (commonSpeed) {
+    els.paperSpeed.value = String(commonSpeed);
+    els.customSpeed.value = round(speed, 2);
+  } else {
+    els.paperSpeed.value = "custom";
+    els.customSpeed.value = round(speed, 2);
+  }
+  syncCalibrationFromInputs();
 }
 
 function eraseAt(point) {
@@ -984,6 +1020,10 @@ function selectedHighlightMeta() {
 }
 
 function labelForAnnotation(annotation) {
+  if (annotation.type === "timecal") {
+    const data = timeCalibrationData(annotation);
+    return `${round(data.knownMs, 0)} ms | ${round(data.paperSpeed, 2)} mm/s`;
+  }
   if (annotation.kind === "calibration" || annotation.type === "calibrate") {
     const dx = Math.abs(annotation.end.x - annotation.start.x);
     const dy = Math.abs(annotation.end.y - annotation.start.y);
@@ -1013,6 +1053,15 @@ function measurementData(annotation) {
   const mv = dyBoxes * (1 / state.calibration.gain);
   const rate = ms > 0 ? 60000 / ms : 0;
   return { dx, dy, dxBoxes, dyBoxes, ms, mv, rate };
+}
+
+function timeCalibrationData(annotation) {
+  const dx = Math.abs(annotation.end.x - annotation.start.x);
+  const smallBoxes = dx / state.calibration.pxPerSmallX;
+  const knownMs = getKnownTimeMs();
+  const msPerSmallBox = smallBoxes > 0 ? knownMs / smallBoxes : 0;
+  const paperSpeed = msPerSmallBox > 0 ? 1000 / msPerSmallBox : 0;
+  return { dx, smallBoxes, knownMs, msPerSmallBox, paperSpeed };
 }
 
 function getMarchSteps(annotation) {

@@ -230,6 +230,13 @@ h2 {
   gap: 8px;
 }
 
+.calibration-tools {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .tool-button {
   min-height: 38px;
   background: #f8faf9;

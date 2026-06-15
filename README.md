@@ -7,6 +7,7 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 - Upload or drag-drop an EKG/rhythm strip image.
 - Set paper speed, gain, horizontal box spacing, and vertical box spacing.
 - Align a movable grid overlay to the uploaded image by dragging over a known number of small boxes.
+- Calculate paper speed by entering a known duration and dragging across that time span.
 - Calibrate box spacing by dragging across a known number of small boxes.
 - Add interval, R-R/rate, and amplitude calipers.
 - Add marching calipers that set an interval once and repeat that spacing across the strip.
@@ -20,6 +21,8 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 The app defaults to 25 mm/s and 10 mm/mV. At 25 mm/s, one small 1 mm box is 40 ms and one large 5 mm box is 200 ms. At 10 mm/mV, one small vertical box is 0.1 mV. These defaults are editable because uploaded images may come from different paper speeds, gains, screenshots, or resized scans.
 
 For reliable image measurement, use **Align Grid** first. Set `Cal boxes` to the number of small boxes you are spanning, commonly 5 for one large ECG box, then drag a rectangle over that same box span on the uploaded strip. This sets the overlay origin plus horizontal and vertical pixel spacing. Leave `Lock square boxes` off unless the image is known to be undistorted.
+
+If paper speed is uncertain but a known time span is visible, use **Time Span** after grid alignment. Enter the known duration in milliseconds, then drag across that time span. The app calculates `small boxes = dragged pixels / px per small box`, `ms per small box = known ms / small boxes`, and `paper speed = 1000 / ms per small box`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which is 25 mm/s.
 
 ECG interpretation is broader than caliper measurement. A systematic review usually includes rate, rhythm regularity, P-wave presence/morphology, PR interval, QRS duration/morphology, QT/QTc context, ST-segment/T-wave changes, artifact, and calibration. This app helps document and measure those findings; it does not diagnose.
 

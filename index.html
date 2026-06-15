@@ -89,13 +89,20 @@
               <input id="showGrid" type="checkbox" checked>
               <span>Show grid overlay</span>
             </label>
+            <div class="calibration-tools" role="toolbar" aria-label="Calibration tools">
+              <button class="tool-button" data-tool="gridalign" type="button">Align Grid</button>
+              <button class="tool-button" data-tool="timecal" type="button">Time Span</button>
+            </div>
+            <label class="field compact">
+              <span>Known time ms</span>
+              <input id="knownTimeMs" type="number" min="1" step="10" value="400">
+            </label>
           </section>
 
           <section class="panel-section">
             <h2>Tools</h2>
             <div class="tool-grid" role="toolbar" aria-label="Annotation tools">
               <button class="tool-button active" data-tool="pan" type="button">Pan</button>
-              <button class="tool-button" data-tool="gridalign" type="button">Align Grid</button>
               <button class="tool-button" data-tool="calibrate" type="button">Calibrate</button>
               <button class="tool-button" data-tool="interval" type="button">Interval</button>
               <button class="tool-button" data-tool="rr" type="button">R-R</button>
