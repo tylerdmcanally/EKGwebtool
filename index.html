@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EKG Caliper Studio</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Browser based ECG image measurement</p>
+          <h1>EKG Caliper Studio</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="button ghost" id="downloadPngBtn" type="button">PNG</button>
+          <button class="button ghost" id="downloadPdfBtn" type="button">PDF</button>
+          <button class="button primary" id="shareBtn" type="button">Share</button>
+        </div>
+      </header>
+
+      <main class="app-layout">
+        <aside class="side-panel" aria-label="Controls">
+          <section class="panel-section">
+            <h2>Image</h2>
+            <label class="file-target">
+              <input id="imageInput" type="file" accept="image/*">
+              <span>Upload strip image</span>
+            </label>
+            <button class="button full" id="demoBtn" type="button">Demo strip</button>
+            <p class="fine-print">Images stay in this browser session unless exported.</p>
+          </section>
+
+          <section class="panel-section">
+            <h2>Calibration</h2>
+            <label class="field">
+              <span>Paper speed</span>
+              <select id="paperSpeed">
+                <option value="25">25 mm/s</option>
+                <option value="50">50 mm/s</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label class="field compact hidden" id="customSpeedField">
+              <span>Custom speed</span>
+              <input id="customSpeed" type="number" min="1" step="0.5" value="25">
+            </label>
+            <label class="field">
+              <span>Gain</span>
+              <select id="gain">
+                <option value="10">10 mm/mV</option>
+                <option value="5">5 mm/mV</option>
+                <option value="20">20 mm/mV</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label class="field compact hidden" id="customGainField">
+              <span>Custom gain</span>
+              <input id="customGain" type="number" min="1" step="0.5" value="10">
+            </label>
+            <div class="two-column">
+              <label class="field compact">
+                <span>Time box px</span>
+                <input id="boxPxX" type="number" min="1" step="0.5" value="18">
+              </label>
+              <label class="field compact">
+                <span>Volt box px</span>
+                <input id="boxPxY" type="number" min="1" step="0.5" value="18">
+              </label>
+            </div>
+            <label class="check-row">
+              <input id="lockBoxes" type="checkbox" checked>
+              <span>Lock square boxes</span>
+            </label>
+            <div class="two-column">
+              <label class="field compact">
+                <span>Cal boxes</span>
+                <input id="calibrationBoxes" type="number" min="1" step="1" value="5">
+              </label>
+              <label class="field compact">
+                <span>Grid opacity</span>
+                <input id="gridOpacity" type="range" min="0" max="0.75" step="0.05" value="0.35">
+              </label>
+            </div>
+            <label class="check-row">
+              <input id="showGrid" type="checkbox" checked>
+              <span>Show grid overlay</span>
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <h2>Tools</h2>
+            <div class="tool-grid" role="toolbar" aria-label="Annotation tools">
+              <button class="tool-button active" data-tool="pan" type="button">Pan</button>
+              <button class="tool-button" data-tool="calibrate" type="button">Calibrate</button>
+              <button class="tool-button" data-tool="interval" type="button">Interval</button>
+              <button class="tool-button" data-tool="rr" type="button">R-R</button>
+              <button class="tool-button" data-tool="amplitude" type="button">mV</button>
+              <button class="tool-button" data-tool="highlight" type="button">Highlight</button>
+              <button class="tool-button" data-tool="note" type="button">Note</button>
+              <button class="tool-button" data-tool="erase" type="button">Erase</button>
+            </div>
+            <label class="field">
+              <span>Highlight type</span>
+              <select id="highlightType">
+                <option value="P wave" data-color="#f59e0b">P wave</option>
+                <option value="QRS" data-color="#ef4444">QRS</option>
+                <option value="ST segment" data-color="#2563eb">ST segment</option>
+                <option value="T wave" data-color="#7c3aed">T wave</option>
+                <option value="Custom" data-color="#0f766e">Custom</option>
+              </select>
+            </label>
+            <div class="button-row">
+              <button class="button" id="undoBtn" type="button">Undo</button>
+              <button class="button danger" id="clearBtn" type="button">Clear</button>
+            </div>
+          </section>
+
+          <section class="panel-section">
+            <h2>Measurements</h2>
+            <div class="summary" id="summary">
+              <span>No measurements yet.</span>
+            </div>
+            <ol class="measurement-list" id="measurementList"></ol>
+          </section>
+
+          <section class="panel-section">
+            <h2>Interpretation Checklist</h2>
+            <div class="checklist">
+              <label><input type="checkbox"> Rate and regularity</label>
+              <label><input type="checkbox"> P waves and PR interval</label>
+              <label><input type="checkbox"> QRS width and morphology</label>
+              <label><input type="checkbox"> QT / QTc context</label>
+              <label><input type="checkbox"> ST segment and T waves</label>
+              <label><input type="checkbox"> Artifact and calibration</label>
+            </div>
+          </section>
+        </aside>
+
+        <section class="workspace" aria-label="EKG workspace">
+          <div class="canvas-toolbar">
+            <div class="zoom-controls">
+              <button class="button square" id="zoomOutBtn" type="button" aria-label="Zoom out">-</button>
+              <button class="button" id="fitBtn" type="button">Fit</button>
+              <button class="button square" id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+            </div>
+            <div class="readout" id="readout">Upload an image or load the demo strip.</div>
+          </div>
+          <div class="stage" id="stage">
+            <canvas id="stripCanvas"></canvas>
+            <div class="empty-state" id="emptyState">
+              <strong>Drop an EKG image here</strong>
+              <span>JPEG, PNG, or a screenshot of a rhythm strip or 12-lead printout.</span>
+            </div>
+          </div>
+          <div class="statusbar">
+            <span id="statusText">For education, review, and documentation only. Not a diagnostic medical device.</span>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
