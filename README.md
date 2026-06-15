@@ -13,7 +13,8 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 - Add marching calipers that set an interval once and repeat that spacing across the strip.
 - Highlight P waves, QRS complexes, ST segments, T waves, or custom areas.
 - Add notes, erase annotations, clear/undo, zoom, pan, and fit.
-- Select marks from the strip or measurement list, then delete the selected mark directly.
+- Keep the strip visible while the control panel scrolls independently on desktop.
+- Select marks from the strip or measurement list, then delete the selected mark from the panel or directly over the workspace.
 - Export an annotated PNG or one-page PDF report.
 - Share through the browser Web Share API when available; otherwise download the PDF and open an email draft.
 

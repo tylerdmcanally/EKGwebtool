@@ -31,6 +31,9 @@ const els = {
   highlightType: document.getElementById("highlightType"),
   selectionText: document.getElementById("selectionText"),
   deleteSelectedBtn: document.getElementById("deleteSelectedBtn"),
+  workspaceSelectionBar: document.getElementById("workspaceSelectionBar"),
+  workspaceSelectionText: document.getElementById("workspaceSelectionText"),
+  workspaceDeleteBtn: document.getElementById("workspaceDeleteBtn"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
   readout: document.getElementById("readout"),
@@ -203,6 +206,7 @@ els.downloadPngBtn.addEventListener("click", downloadPng);
 els.downloadPdfBtn.addEventListener("click", downloadPdf);
 els.shareBtn.addEventListener("click", shareReport);
 els.deleteSelectedBtn.addEventListener("click", deleteSelectedAnnotation);
+els.workspaceDeleteBtn.addEventListener("click", deleteSelectedAnnotation);
 
 els.measurementList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-delete-id]");
@@ -264,10 +268,15 @@ function updateSelectionUi() {
   if (!annotation) {
     els.selectionText.textContent = "No mark selected";
     els.deleteSelectedBtn.disabled = true;
+    els.workspaceSelectionText.textContent = "No mark selected";
+    els.workspaceSelectionBar.classList.add("hidden");
     return;
   }
-  els.selectionText.textContent = `${annotationDisplayName(annotation)} selected`;
+  const label = `${annotationDisplayName(annotation)} selected`;
+  els.selectionText.textContent = label;
+  els.workspaceSelectionText.textContent = label;
   els.deleteSelectedBtn.disabled = false;
+  els.workspaceSelectionBar.classList.remove("hidden");
 }
 
 function annotationDisplayName(annotation) {

@@ -20,7 +20,8 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
 }
@@ -32,7 +33,7 @@ select {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -422,15 +423,46 @@ h2 {
 
 .stage {
   position: relative;
-  min-height: 480px;
+  min-height: 0;
   overflow: hidden;
   background: var(--canvas-bg);
+}
+
+.workspace-selection {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  right: 12px;
+  max-width: min(360px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+}
+
+.workspace-selection span {
+  min-width: 0;
+  color: #25312d;
+  font-size: 0.82rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-selection .button {
+  min-height: 32px;
+  padding: 5px 10px;
 }
 
 #stripCanvas {
   width: 100%;
   height: 100%;
-  min-height: 480px;
+  min-height: 0;
   display: block;
   touch-action: none;
   cursor: crosshair;
@@ -466,6 +498,17 @@ h2 {
 }
 
 @media (max-width: 980px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -486,6 +529,11 @@ h2 {
 
   .panel-section {
     padding-top: 14px;
+  }
+
+  .stage,
+  #stripCanvas {
+    min-height: 480px;
   }
 }
 
@@ -509,5 +557,11 @@ h2 {
 
   .readout {
     white-space: normal;
+  }
+
+  .workspace-selection {
+    left: 10px;
+    right: 10px;
+    max-width: none;
   }
 }
