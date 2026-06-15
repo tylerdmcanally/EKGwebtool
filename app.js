@@ -168,6 +168,9 @@ els.calibrationBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
 els.autoGridBtn.addEventListener("click", autoDetectGrid);
+document.querySelectorAll("[data-grid-nudge]").forEach((button) => {
+  button.addEventListener("click", () => shiftGridOverlay(button.dataset.gridNudge));
+});
 els.marchSteps.addEventListener("input", render);
 els.knownTimeMs.addEventListener("input", syncCalibrationFromInputs);
 els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
@@ -347,6 +350,29 @@ function autoDetectGrid() {
   updateMeasurements();
 }
 
+function shiftGridOverlay(direction) {
+  if (!state.image) {
+    setStatus("Load an image before shifting the grid overlay.");
+    return;
+  }
+  const moves = {
+    left: { x: -state.calibration.pxPerSmallX, y: 0 },
+    right: { x: state.calibration.pxPerSmallX, y: 0 },
+    up: { x: 0, y: -state.calibration.pxPerSmallY },
+    down: { x: 0, y: state.calibration.pxPerSmallY }
+  };
+  const move = moves[direction];
+  if (!move) return;
+
+  state.calibration.originX += move.x;
+  state.calibration.originY += move.y;
+  state.calibration.showGrid = true;
+  els.showGrid.checked = true;
+  els.gridCalSummary.textContent = `Overlay shifted ${direction} one small box. Confirm the grid lines match before measuring.`;
+  setStatus(`Shifted the grid overlay ${direction} by one small box.`);
+  render();
+}
+
 function detectEcgGrid(image) {
   // Best-effort detector: find repeating red/gray grid-line peaks in image-space projections.
   const maxSide = 1400;
@@ -510,7 +536,7 @@ function refinePeriod(signal, period, phase, total) {
     if (subdivision && candidate < best.period) {
       best = {
         period: candidate,
-        phase: fit.score > 0 ? fit.phase : best.phase % candidate,
+        phase: best.phase,
         score: Math.max(fit.score, best.score * 0.2),
         confidence: Math.min(best.confidence * 0.45, Math.max(fit.confidence, 0.08))
       };

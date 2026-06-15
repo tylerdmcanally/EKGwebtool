@@ -276,6 +276,24 @@ h2 {
   line-height: 1.4;
 }
 
+.grid-nudge {
+  margin-top: 10px;
+  display: grid;
+  gap: 7px;
+}
+
+.grid-nudge span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.grid-nudge-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 38px);
+  gap: 8px;
+}
+
 .measurement-list {
   list-style: decimal;
   padding-left: 20px;
