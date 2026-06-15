@@ -4,7 +4,6 @@ const ctx = canvas.getContext("2d");
 const els = {
   imageInput: document.getElementById("imageInput"),
   demoBtn: document.getElementById("demoBtn"),
-  privacyReviewed: document.getElementById("privacyReviewed"),
   privacySummary: document.getElementById("privacySummary"),
   headerRedactBtn: document.getElementById("headerRedactBtn"),
   applyRedactionsBtn: document.getElementById("applyRedactionsBtn"),
@@ -75,7 +74,6 @@ const state = {
   selectedTool: "select",
   selectedAnnotationId: null,
   nextId: 1,
-  privacyReviewed: false,
   view: {
     scale: 1,
     offsetX: 0,
@@ -137,10 +135,6 @@ els.stage.addEventListener("drop", (event) => {
 });
 
 els.demoBtn.addEventListener("click", loadDemoStrip);
-els.privacyReviewed.addEventListener("change", () => {
-  state.privacyReviewed = els.privacyReviewed.checked;
-  updatePrivacyUi();
-});
 els.headerRedactBtn.addEventListener("click", addHeaderRedaction);
 els.applyRedactionsBtn.addEventListener("click", applyRedactionsToImage);
 els.clearRedactionsBtn.addEventListener("click", clearRedactions);
@@ -279,7 +273,7 @@ function deleteAnnotation(id) {
     state.selectedAnnotationId = null;
   }
   if (removedAnnotation && removedAnnotation.kind === "redaction") {
-    requirePrivacyReview();
+    updatePrivacyUi();
   }
   render();
   updateMeasurements();
@@ -334,7 +328,7 @@ function addHeaderRedaction() {
   };
   state.annotations.push(annotation);
   state.selectedAnnotationId = annotation.id;
-  requirePrivacyReview();
+  updatePrivacyUi();
   setStatus("Top header redaction added. Resize it if the PHI area is larger or smaller.");
   render();
   updateMeasurements();
@@ -348,8 +342,8 @@ function clearRedactions() {
   if (!selected || selected.kind === "redaction") {
     state.selectedAnnotationId = null;
   }
-  requirePrivacyReview();
-  setStatus("Redactions cleared. Review the image again before export.");
+  updatePrivacyUi();
+  setStatus("Redactions cleared.");
   render();
   updateMeasurements();
 }
@@ -380,8 +374,8 @@ function applyRedactionsToImage() {
     if (!selected) {
       state.selectedAnnotationId = null;
     }
-    requirePrivacyReview();
-    setStatus("Redactions applied to the working image. Perform final PHI review before export.");
+    updatePrivacyUi();
+    setStatus("Redactions applied to the working image.");
     render();
     updateMeasurements();
   };
@@ -403,38 +397,20 @@ function redactionAnnotations() {
   return state.annotations.filter((annotation) => annotation.kind === "redaction");
 }
 
-function requirePrivacyReview() {
-  state.privacyReviewed = false;
-  els.privacyReviewed.checked = false;
-  updatePrivacyUi();
-}
-
 function updatePrivacyUi() {
   const redactionCount = redactionAnnotations().length;
   const loaded = Boolean(state.image);
   els.headerRedactBtn.disabled = !loaded;
   els.applyRedactionsBtn.disabled = !loaded || redactionCount === 0;
   els.clearRedactionsBtn.disabled = !loaded || redactionCount === 0;
-  els.privacyReviewed.disabled = !loaded;
 
   if (!loaded) {
-    els.privacySummary.classList.remove("reviewed");
-    els.privacySummary.textContent = "Load a strip, redact visible identifiers, then mark PHI scrub reviewed before export.";
+    els.privacySummary.textContent = "Load a strip to use optional redaction tools.";
     return;
   }
 
-  els.privacySummary.classList.toggle("reviewed", state.privacyReviewed);
   const redactionText = `${redactionCount} active redaction${redactionCount === 1 ? "" : "s"}`;
-  els.privacySummary.textContent = state.privacyReviewed
-    ? `PHI scrub reviewed. ${redactionText}. Exports are enabled.`
-    : `PHI scrub required before export. ${redactionText}. Redact names, MRNs, dates, and other identifiers.`;
-}
-
-function canExportWithPrivacyReview(action) {
-  if (state.privacyReviewed) return true;
-  setStatus(`PHI scrub review is required before ${action}. Redact identifiers, then check PHI scrub reviewed.`);
-  els.privacyReviewed.focus();
-  return false;
+  els.privacySummary.textContent = `${redactionText}. Redactions are optional and will appear in PNG, PDF, and share exports.`;
 }
 
 function updateSelectionUi() {
@@ -1018,7 +994,7 @@ function loadImageFile(file) {
   reader.readAsDataURL(file);
 }
 
-function loadImageSource(src, name, options = {}) {
+function loadImageSource(src, name) {
   const image = new Image();
   image.onload = () => {
     state.image = image;
@@ -1026,8 +1002,6 @@ function loadImageSource(src, name, options = {}) {
     state.annotations = [];
     state.nextId = 1;
     state.selectedAnnotationId = null;
-    state.privacyReviewed = Boolean(options.privacyReviewed);
-    els.privacyReviewed.checked = state.privacyReviewed;
     resetImageGridCalibration();
     els.emptyState.classList.add("hidden");
     fitImage();
@@ -1072,7 +1046,7 @@ function loadDemoStrip() {
   state.calibration.originY = 0;
   els.boxPxX.value = small;
   els.boxPxY.value = small;
-  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip", { privacyReviewed: true });
+  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip");
 }
 
 function drawDemoGrid(dctx, width, height, small) {
@@ -1592,7 +1566,6 @@ function onPointerDown(event) {
       };
       state.annotations.push(annotation);
       state.selectedAnnotationId = annotation.id;
-      requirePrivacyReview();
       render();
       updateMeasurements();
     }
@@ -1679,8 +1652,8 @@ function onPointerUp(event) {
     };
     state.annotations.push(annotation);
     state.selectedAnnotationId = annotation.id;
-    requirePrivacyReview();
-    setStatus("Redaction added. Review all visible identifiers before export.");
+    updatePrivacyUi();
+    setStatus("Redaction added.");
   } else if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
     const annotation = {
@@ -1716,17 +1689,17 @@ function updateEditedAnnotation(active, point) {
   if (!annotation) return;
   if (active.handle === "point") {
     annotation.point = point;
-    if (annotation.kind === "redaction") requirePrivacyReview();
+    if (annotation.kind === "redaction") updatePrivacyUi();
     return;
   }
   if (active.handle === "start") {
     annotation.start = point;
-    if (annotation.kind === "redaction") requirePrivacyReview();
+    if (annotation.kind === "redaction") updatePrivacyUi();
     return;
   }
   if (active.handle === "end") {
     annotation.end = point;
-    if (annotation.kind === "redaction") requirePrivacyReview();
+    if (annotation.kind === "redaction") updatePrivacyUi();
   }
 }
 
@@ -2135,7 +2108,6 @@ async function downloadPng() {
     setStatus("Load an image before exporting.");
     return;
   }
-  if (!canExportWithPrivacyReview("PNG export")) return;
   const report = createReportCanvas();
   const blob = await canvasToBlob(report, "image/png");
   downloadBlob(blob, filenameBase() + "-annotated.png");
@@ -2146,7 +2118,6 @@ async function downloadPdf() {
     setStatus("Load an image before exporting.");
     return;
   }
-  if (!canExportWithPrivacyReview("PDF export")) return;
   const blob = await createPdfBlob();
   downloadBlob(blob, filenameBase() + "-annotated.pdf");
 }
@@ -2156,7 +2127,6 @@ async function shareReport() {
     setStatus("Load an image before sharing.");
     return;
   }
-  if (!canExportWithPrivacyReview("sharing")) return;
   const blob = await createPdfBlob();
   const file = new File([blob], filenameBase() + "-annotated.pdf", { type: "application/pdf" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2191,7 +2161,7 @@ function createReportCanvas() {
   reportCtx.fillText("EKG Caliper Studio Report", 48, 62);
   reportCtx.font = "500 18px Inter, Arial, sans-serif";
   reportCtx.fillStyle = "#52605b";
-  reportCtx.fillText(`PHI scrub reviewed | Generated ${new Date().toLocaleString()}`, 48, 94);
+  reportCtx.fillText(`Generated ${new Date().toLocaleString()}`, 48, 94);
 
   const imageSlot = { x: 48, y: 130, width: 1240, height: 980 };
   const panel = { x: 1326, y: 130, width: 426, height: 980 };

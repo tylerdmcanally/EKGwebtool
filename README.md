@@ -5,9 +5,8 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 ## First Pass Scope
 
 - Upload or drag-drop an EKG/rhythm strip image.
-- Redact visible PHI or identifiers with black mask rectangles before export.
-- Add a one-click top header redaction for common EKG printout demographics.
-- Require PHI scrub review before PNG, PDF, or share export.
+- Use optional redaction tools to mask visible headers or identifiers before export.
+- Add a one-click top header redaction for common EKG printout demographics when needed.
 - Auto-detect visible ECG paper grids on image load and align the measurement overlay.
 - Set paper speed or use a known time marker on the strip to calibrate intervals.
 - Set gain for voltage measurement.
@@ -25,11 +24,9 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 
 ## Privacy Handling
 
-The app is static and client-side: uploaded images are processed in the browser and are not sent to a server by this site. The export workflow still treats visible identifiers as sensitive. Uploaded source filenames are not included in generated reports, and exported files use a generic `ekg-report` name.
+The app is static and client-side: uploaded images are processed in the browser and are not sent to a server by this site. Uploaded source filenames are not included in generated reports, and exported files use a generic `ekg-report` name.
 
-Use **Redact area** to draw black masks over names, MRNs, DOBs, accession numbers, facility labels, timestamps tied to the patient, or any other visible identifier. **Block top header** adds a quick full-width mask over the common demographics area. Redactions are included in PNG, PDF, and share exports. **Apply redactions** bakes active masks into the working image and removes the editable mask layer.
-
-Exports are blocked until **PHI scrub reviewed** is checked. This is a workflow control, not automated de-identification or OCR. The user still needs to visually inspect the entire image before exporting or sharing.
+The redaction drawer is collapsed by default for internal VA use. Use **Redact area** to draw black masks over any visible header or identifier you do not want in an export. **Block top header** adds a quick full-width mask over the common demographics area. Redactions are included in PNG, PDF, and share exports. **Apply redactions** bakes active masks into the working image and removes the editable mask layer.
 
 ## Clinical Measurement Defaults
 
