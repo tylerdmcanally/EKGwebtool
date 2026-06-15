@@ -233,7 +233,7 @@ h2 {
 .calibration-tools {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
 }
 
@@ -267,6 +267,24 @@ h2 {
   font-size: 0.8rem;
   font-weight: 650;
   line-height: 1.35;
+}
+
+.advanced-calibration {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfc;
+  padding: 0 10px 10px;
+}
+
+.advanced-calibration summary {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
 }
 
 .measurement-list {

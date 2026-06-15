@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EKG Caliper Studio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M8 34h11l5-14 8 28 6-22 4 8h14' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260615-calflow">
-    <script src="app.js?v=20260615-calflow" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260615-clean-cal">
+    <script src="app.js?v=20260615-clean-cal" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -68,36 +68,11 @@
               <span>Custom gain</span>
               <input id="customGain" type="number" min="1" step="0.5" value="10">
             </label>
-            <div class="two-column">
-              <label class="field compact">
-                <span>Time box px</span>
-                <input id="boxPxX" type="number" min="1" step="0.5" value="18">
-              </label>
-              <label class="field compact">
-                <span>Volt box px</span>
-                <input id="boxPxY" type="number" min="1" step="0.5" value="18">
-              </label>
-            </div>
-            <label class="check-row">
-              <input id="lockBoxes" type="checkbox">
-              <span>Lock square boxes</span>
-            </label>
-            <div class="two-column">
-              <label class="field compact">
-                <span>Cal boxes</span>
-                <input id="calibrationBoxes" type="number" min="1" step="1" value="5">
-              </label>
-              <label class="field compact">
-                <span>Grid opacity</span>
-                <input id="gridOpacity" type="range" min="0" max="0.75" step="0.05" value="0.35">
-              </label>
-            </div>
             <label class="check-row">
               <input id="showGrid" type="checkbox" checked>
               <span>Show grid overlay</span>
             </label>
             <div class="calibration-tools" role="toolbar" aria-label="Calibration tools">
-              <button class="tool-button" data-tool="gridalign" type="button">Align Grid</button>
               <button class="tool-button" data-tool="timecal" type="button">Drag Span</button>
             </div>
             <div class="two-column">
@@ -111,6 +86,36 @@
               </label>
             </div>
             <div class="calibration-summary" id="timeCalSummary">25 mm/s: drag 5 large boxes = 1000 ms.</div>
+            <details class="advanced-calibration">
+              <summary>Grid overlay and advanced values</summary>
+              <div class="calibration-tools" role="toolbar" aria-label="Grid overlay tools">
+                <button class="tool-button" data-tool="gridalign" type="button">Align Grid</button>
+              </div>
+              <div class="two-column">
+                <label class="field compact">
+                  <span>Grid boxes to align</span>
+                  <input id="calibrationBoxes" type="number" min="1" step="1" value="5">
+                </label>
+                <label class="field compact">
+                  <span>Grid opacity</span>
+                  <input id="gridOpacity" type="range" min="0" max="0.75" step="0.05" value="0.35">
+                </label>
+              </div>
+              <div class="two-column">
+                <label class="field compact">
+                  <span>Time grid px</span>
+                  <input id="boxPxX" type="number" min="1" step="0.5" value="18">
+                </label>
+                <label class="field compact">
+                  <span>Voltage grid px</span>
+                  <input id="boxPxY" type="number" min="1" step="0.5" value="18">
+                </label>
+              </div>
+              <label class="check-row">
+                <input id="lockBoxes" type="checkbox">
+                <span>Lock square boxes</span>
+              </label>
+            </details>
           </section>
 
           <section class="panel-section">
