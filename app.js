@@ -39,6 +39,7 @@ const colors = {
   rr: "#b45309",
   march: "#7c3aed",
   amplitude: "#2563eb",
+  gridalign: "#be123c",
   calibrate: "#111827",
   note: "#374151"
 };
@@ -60,10 +61,12 @@ const state = {
     gain: 10,
     pxPerSmallX: 18,
     pxPerSmallY: 18,
-    lockBoxes: true,
+    lockBoxes: false,
     calibrationBoxes: 5,
     gridOpacity: 0.35,
-    showGrid: true
+    showGrid: true,
+    originX: 0,
+    originY: 0
   }
 };
 
@@ -209,6 +212,7 @@ function setTool(tool) {
     pan: "grab",
     erase: "not-allowed",
     note: "copy",
+    gridalign: "crosshair",
     calibrate: "crosshair",
     interval: "crosshair",
     rr: "crosshair",
@@ -223,6 +227,7 @@ function setTool(tool) {
 function statusForTool(tool) {
   const map = {
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
+    gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
@@ -256,6 +261,10 @@ function syncCalibrationFromInputs() {
 function numberFromInput(input, fallback) {
   const value = Number(input.value);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function getCalibrationBoxCount() {
+  return Math.max(1, Math.round(numberFromInput(els.calibrationBoxes, 5)));
 }
 
 function loadImageFile(file) {
@@ -309,6 +318,8 @@ function loadDemoStrip() {
 
   state.calibration.pxPerSmallX = small;
   state.calibration.pxPerSmallY = small;
+  state.calibration.originX = 0;
+  state.calibration.originY = 0;
   els.boxPxX.value = small;
   els.boxPxY.value = small;
   loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip.png");
@@ -416,7 +427,11 @@ function drawGrid(targetCtx, view) {
   targetCtx.save();
   targetCtx.lineCap = "butt";
 
-  for (let x = 0, index = 0; x <= image.width; x += xStep, index += 1) {
+  const firstX = firstGridLine(state.calibration.originX, xStep);
+  const firstY = firstGridLine(state.calibration.originY, yStep);
+
+  for (let x = firstX; x <= image.width; x += xStep) {
+    const index = Math.round((x - state.calibration.originX) / xStep);
     const sx = left + x * view.scale;
     if (sx < left || sx > right) continue;
     targetCtx.beginPath();
@@ -429,7 +444,8 @@ function drawGrid(targetCtx, view) {
     targetCtx.stroke();
   }
 
-  for (let y = 0, index = 0; y <= image.height; y += yStep, index += 1) {
+  for (let y = firstY; y <= image.height; y += yStep) {
+    const index = Math.round((y - state.calibration.originY) / yStep);
     const sy = top + y * view.scale;
     if (sy < top || sy > bottom) continue;
     targetCtx.beginPath();
@@ -446,6 +462,10 @@ function drawGrid(targetCtx, view) {
 }
 
 function drawAnnotation(targetCtx, annotation, view, isPreview = false) {
+  if (annotation.kind === "gridalign") {
+    drawGridAlignPreview(targetCtx, annotation, view);
+    return;
+  }
   if (annotation.kind === "highlight") {
     drawHighlight(targetCtx, annotation, view, isPreview);
     return;
@@ -502,6 +522,39 @@ function drawMeasure(targetCtx, annotation, view, isPreview = false) {
   targetCtx.fill();
 
   drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(start, end), color);
+  targetCtx.restore();
+}
+
+function drawGridAlignPreview(targetCtx, annotation, view) {
+  const rect = normalizedRect(annotation.start, annotation.end);
+  const start = toScreen({ x: rect.x, y: rect.y }, view);
+  const end = toScreen({ x: rect.x + rect.width, y: rect.y + rect.height }, view);
+  const width = end.x - start.x;
+  const height = end.y - start.y;
+  const boxes = Math.max(1, getCalibrationBoxCount());
+
+  targetCtx.save();
+  targetCtx.strokeStyle = colors.gridalign;
+  targetCtx.fillStyle = hexToRgba(colors.gridalign, 0.08);
+  targetCtx.lineWidth = 2;
+  targetCtx.setLineDash([8, 5]);
+  targetCtx.fillRect(start.x, start.y, width, height);
+  targetCtx.strokeRect(start.x, start.y, width, height);
+  targetCtx.setLineDash([]);
+  targetCtx.lineWidth = 1;
+
+  for (let index = 1; index < boxes; index += 1) {
+    const x = start.x + (width * index) / boxes;
+    const y = start.y + (height * index) / boxes;
+    targetCtx.beginPath();
+    targetCtx.moveTo(x, start.y);
+    targetCtx.lineTo(x, end.y);
+    targetCtx.moveTo(start.x, y);
+    targetCtx.lineTo(end.x, y);
+    targetCtx.stroke();
+  }
+
+  drawBubble(targetCtx, `${boxes} x ${boxes} boxes`, { x: start.x + 8, y: start.y + 16 }, colors.gridalign);
   targetCtx.restore();
 }
 
@@ -621,6 +674,14 @@ function roundedRect(targetCtx, x, y, width, height, radius) {
 function previewAnnotation() {
   const active = state.active;
   if (!active) return null;
+  if (active.kind === "gridalign") {
+    return {
+      id: 0,
+      kind: "gridalign",
+      start: active.start,
+      end: active.end
+    };
+  }
   if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
     return {
@@ -722,7 +783,9 @@ function onPointerUp(event) {
     return;
   }
 
-  if (active.kind === "calibrate") {
+  if (active.kind === "gridalign") {
+    applyGridAlignment(active.start, active.end);
+  } else if (active.kind === "calibrate") {
     applyCalibration(active.start, active.end);
   } else if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
@@ -759,7 +822,7 @@ function onWheel(event) {
 }
 
 function applyCalibration(start, end) {
-  const boxes = Math.max(1, state.calibration.calibrationBoxes);
+  const boxes = getCalibrationBoxCount();
   const dx = Math.abs(end.x - start.x);
   const dy = Math.abs(end.y - start.y);
   if (dx >= dy) {
@@ -781,6 +844,33 @@ function applyCalibration(start, end) {
     }
     setStatus(`Vertical calibration set to ${round(value, 2)} px per small box.`);
   }
+}
+
+function applyGridAlignment(start, end) {
+  const boxes = getCalibrationBoxCount();
+  const rect = normalizedRect(start, end);
+  if (rect.width < 4 || rect.height < 4) {
+    setStatus("Grid alignment box was too small to calibrate.");
+    return;
+  }
+
+  const pxX = rect.width / boxes;
+  const pxY = rect.height / boxes;
+  if (state.calibration.lockBoxes) {
+    const average = (pxX + pxY) / 2;
+    state.calibration.pxPerSmallX = average;
+    state.calibration.pxPerSmallY = average;
+    els.boxPxX.value = round(average, 2);
+    els.boxPxY.value = round(average, 2);
+  } else {
+    state.calibration.pxPerSmallX = pxX;
+    state.calibration.pxPerSmallY = pxY;
+    els.boxPxX.value = round(pxX, 2);
+    els.boxPxY.value = round(pxY, 2);
+  }
+  state.calibration.originX = rect.x;
+  state.calibration.originY = rect.y;
+  setStatus(`Grid aligned: ${round(pxX, 2)} px/time box, ${round(pxY, 2)} px/voltage box across ${boxes} boxes.`);
 }
 
 function eraseAt(point) {
@@ -843,6 +933,11 @@ function toScreen(point, view) {
     x: view.offsetX + point.x * view.scale,
     y: view.offsetY + point.y * view.scale
   };
+}
+
+function firstGridLine(origin, step) {
+  if (!Number.isFinite(origin) || !Number.isFinite(step) || step <= 0) return 0;
+  return origin - Math.ceil(origin / step) * step;
 }
 
 function fitImage() {
