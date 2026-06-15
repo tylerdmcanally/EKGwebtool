@@ -5,10 +5,9 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 ## First Pass Scope
 
 - Upload or drag-drop an EKG/rhythm strip image.
-- Set paper speed, gain, horizontal box spacing, and vertical box spacing.
-- Align a movable grid overlay to the uploaded image by dragging over a known number of small boxes.
-- Calculate paper speed by entering a known duration and dragging across that time span.
-- Calibrate box spacing by dragging across a known number of small boxes.
+- Set paper speed or use a known time marker on the strip to calibrate intervals.
+- Set gain for voltage measurement.
+- Show a grid overlay while measuring uploaded strips.
 - Add interval, R-R/rate, and amplitude calipers.
 - Add marching calipers that set an interval once and repeat that spacing across the strip.
 - Highlight P waves, QRS complexes, ST segments, T waves, or custom areas.
@@ -20,9 +19,7 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 
 The app defaults to 25 mm/s and 10 mm/mV. At 25 mm/s, one small 1 mm box is 40 ms and one large 5 mm box is 200 ms. At 10 mm/mV, one small vertical box is 0.1 mV. These defaults are editable because uploaded images may come from different paper speeds, gains, screenshots, or resized scans.
 
-For reliable image measurement, use **Align Grid** first. Set `Cal boxes` to the number of small boxes you are spanning, commonly 5 for one large ECG box, then drag a rectangle over that same box span on the uploaded strip. This sets the overlay origin plus horizontal and vertical pixel spacing. Leave `Lock square boxes` off unless the image is known to be undistorted.
-
-For interval calibration, use **Drag Span**. In the common path, choose **Standard paper speed**, confirm the recording speed, choose how many large boxes to drag, and drag across that same span on the strip. For telemetry or nonstandard strips, choose **Known telemetry span**, enter the known duration and large-box span, then drag across those same boxes. The app calculates `small boxes = large boxes * 5`, `px per small box = dragged pixels / small boxes`, and `ms per small box = known ms / small boxes`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which derives 25 mm/s.
+For interval calibration, use **Set Time Scale**. In the common path, choose **Standard speed (25/50 mm/s)**, confirm the recording speed, enter how many large boxes you will trace, then drag left-to-right across exactly that many large boxes. For telemetry or nonstandard strips, choose **Known time marker on strip**, enter the known duration and how many large boxes it covers, then drag across those same boxes. The app calculates `small boxes = large boxes * 5`, `px per small box = dragged pixels / small boxes`, and `ms per small box = known ms / small boxes`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which derives 25 mm/s.
 
 ECG interpretation is broader than caliper measurement. A systematic review usually includes rate, rhythm regularity, P-wave presence/morphology, PR interval, QRS duration/morphology, QT/QTc context, ST-segment/T-wave changes, artifact, and calibration. This app helps document and measure those findings; it does not diagnose.
 

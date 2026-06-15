@@ -269,6 +269,13 @@ h2 {
   line-height: 1.35;
 }
 
+.calibration-help {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .measurement-list {
   list-style: decimal;
   padding-left: 20px;

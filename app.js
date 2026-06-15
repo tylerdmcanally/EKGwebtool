@@ -25,6 +25,7 @@ const els = {
   knownTimeMs: document.getElementById("knownTimeMs"),
   timeLargeBoxes: document.getElementById("timeLargeBoxes"),
   timeCalSummary: document.getElementById("timeCalSummary"),
+  timeCalHelp: document.getElementById("timeCalHelp"),
   highlightType: document.getElementById("highlightType"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
@@ -247,7 +248,7 @@ function statusForTool(tool) {
   const map = {
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
-    timecal: "Use the calibration panel settings, then drag across that exact large-box span.",
+    timecal: "Drag left-to-right across the large boxes selected in the Calibration panel.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
@@ -302,10 +303,12 @@ function getTimeLargeBoxes() {
 function updateTimeCalibrationSummary() {
   const data = timeCalibrationSettings();
   if (els.timeCalMode.value === "known") {
-    els.timeCalSummary.textContent = `Known span: drag ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms (${round(data.paperSpeed, 2)} mm/s effective).`;
+    els.timeCalHelp.textContent = "1. Enter known duration. 2. Count the large boxes it covers. 3. Click Set Time Scale, then drag across those same boxes.";
+    els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms (${round(data.paperSpeed, 2)} mm/s effective).`;
     return;
   }
-  els.timeCalSummary.textContent = `${round(data.paperSpeed, 2)} mm/s: drag ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms.`;
+  els.timeCalHelp.textContent = "1. Pick recording speed. 2. Enter large boxes to trace. 3. Click Set Time Scale, then drag across that exact count.";
+  els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes at ${round(data.paperSpeed, 2)} mm/s = ${round(data.knownMs, 0)} ms.`;
 }
 
 function loadImageFile(file) {
@@ -913,7 +916,7 @@ function applyGridAlignment(start, end) {
   }
   state.calibration.originX = rect.x;
   state.calibration.originY = rect.y;
-  setStatus(`Grid aligned: ${round(pxX, 2)} px/time box, ${round(pxY, 2)} px/voltage box across ${boxes} boxes.`);
+  setStatus(`Grid overlay aligned across ${boxes} small boxes.`);
 }
 
 function applyTimeCalibration(start, end) {
@@ -934,8 +937,8 @@ function applyTimeCalibration(start, end) {
     setPaperSpeed(data.paperSpeed);
   }
   const msPerLarge = data.knownMs / data.largeBoxes;
-  const sourceLabel = els.timeCalMode.value === "known" ? "Known span" : "Standard speed";
-  setStatus(`${sourceLabel} calibrated: ${round(data.knownMs, 0)} ms across ${round(data.largeBoxes, 2)} large boxes (${round(msPerLarge, 1)} ms/large box).`);
+  const sourceLabel = els.timeCalMode.value === "known" ? "known marker" : "standard speed";
+  setStatus(`Time scale set from ${sourceLabel}: ${round(data.knownMs, 0)} ms across ${round(data.largeBoxes, 2)} large boxes (${round(msPerLarge, 1)} ms/large box).`);
 }
 
 function setPaperSpeed(speed) {
@@ -1312,8 +1315,8 @@ function reportLines() {
   const lines = [
     `Paper speed: ${round(state.calibration.paperSpeed, 1)} mm/s`,
     `Gain: ${round(state.calibration.gain, 1)} mm/mV`,
-    `Time box: ${round(state.calibration.pxPerSmallX, 2)} px`,
-    `Volt box: ${round(state.calibration.pxPerSmallY, 2)} px`
+    `Time scale: ${round(1000 / state.calibration.paperSpeed, 1)} ms/small box`,
+    `Voltage scale: ${round(1 / state.calibration.gain, 3)} mV/small box`
   ];
   const measures = state.annotations.filter((annotation) => annotation.kind === "measure");
   if (!measures.length) {
