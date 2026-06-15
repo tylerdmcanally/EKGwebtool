@@ -235,6 +235,31 @@ h2 {
   gap: 12px;
 }
 
+.tool-drawer {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.tool-drawer summary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tool-drawer[open] summary {
+  margin-bottom: 10px;
+}
+
+.tool-drawer .tool-stack {
+  margin-top: 0;
+}
+
+.tool-drawer + .button-row {
+  margin-top: 12px;
+}
+
 .tool-group {
   display: grid;
   gap: 7px;
@@ -271,6 +296,54 @@ h2 {
   background: #e4f3f0;
   border-color: var(--accent);
   color: var(--accent-strong);
+}
+
+.highlight-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.highlight-choice {
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: #27332f;
+  padding: 7px 9px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.highlight-choice:hover {
+  border-color: #9fb0aa;
+}
+
+.highlight-choice.active {
+  background: #f4f8f7;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.2);
+}
+
+.highlight-swatch {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+}
+
+.highlight-choice span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selection-bar {

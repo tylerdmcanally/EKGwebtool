@@ -29,6 +29,7 @@ const els = {
   timeCalSummary: document.getElementById("timeCalSummary"),
   timeCalHelp: document.getElementById("timeCalHelp"),
   highlightType: document.getElementById("highlightType"),
+  highlightChoices: Array.from(document.querySelectorAll("[data-highlight-value]")),
   selectionText: document.getElementById("selectionText"),
   deleteSelectedBtn: document.getElementById("deleteSelectedBtn"),
   workspaceSelectionBar: document.getElementById("workspaceSelectionBar"),
@@ -181,7 +182,17 @@ document.querySelectorAll("[data-grid-nudge]").forEach((button) => {
 els.marchSteps.addEventListener("input", render);
 els.knownTimeMs.addEventListener("input", syncCalibrationFromInputs);
 els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
-els.highlightType.addEventListener("change", render);
+els.highlightType.addEventListener("change", () => {
+  syncHighlightPicker();
+  render();
+});
+els.highlightChoices.forEach((button) => {
+  button.addEventListener("click", () => {
+    els.highlightType.value = button.dataset.highlightValue;
+    syncHighlightPicker();
+    render();
+  });
+});
 
 els.undoBtn.addEventListener("click", () => {
   const removed = state.annotations.pop();
@@ -332,6 +343,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 syncCalibrationFromInputs();
+syncHighlightPicker();
 render();
 updateMeasurements();
 
@@ -1587,6 +1599,15 @@ function selectedHighlightMeta() {
     label: selected.value,
     color: selected.dataset.color || "#0f766e"
   };
+}
+
+function syncHighlightPicker() {
+  const selectedValue = els.highlightType.value;
+  els.highlightChoices.forEach((button) => {
+    const isSelected = button.dataset.highlightValue === selectedValue;
+    button.classList.toggle("active", isSelected);
+    button.setAttribute("aria-checked", String(isSelected));
+  });
 }
 
 function labelForAnnotation(annotation) {
