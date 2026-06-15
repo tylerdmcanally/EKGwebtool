@@ -451,21 +451,27 @@ function updateTimeCalibrationSummary() {
     els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms (${round(data.paperSpeed, 2)} mm/s effective).`;
     return;
   }
-  els.timeCalHelp.textContent = "Auto-detect the grid first. If the overlay is off, enter a large-box count and use Set Time Scale manually.";
+  els.timeCalHelp.textContent = "Confirm the auto-detected grid. If the overlay is off, enter a large-box count and use Set Time Scale manually.";
   els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes at ${round(data.paperSpeed, 2)} mm/s = ${round(data.knownMs, 0)} ms.`;
 }
 
-function autoDetectGrid() {
+function autoDetectGrid(options = {}) {
+  const source = options.source || "manual";
   if (!state.image) {
     setStatus("Load an image before auto-detecting the grid.");
-    return;
+    return false;
   }
 
   const result = detectEcgGrid(state.image);
   if (!result) {
-    els.gridCalSummary.textContent = "Grid not detected. Use Set Time Scale manually on a clearly visible box span.";
-    setStatus("Could not auto-detect a reliable grid. Use Set Time Scale manually.");
-    return;
+    if (source === "load") {
+      els.gridCalSummary.textContent = "No reliable grid detected automatically. Use Set Time Scale manually if the overlay does not match the strip.";
+      setStatus("Image loaded. Auto-detect did not find a reliable grid; use Set Time Scale if needed.");
+    } else {
+      els.gridCalSummary.textContent = "Grid not detected. Use Set Time Scale manually on a clearly visible box span.";
+      setStatus("Could not auto-detect a reliable grid. Use Set Time Scale manually.");
+    }
+    return false;
   }
 
   const normalizedSpacing = normalizeDetectedGridSpacing(result.x.spacing, result.y.spacing);
@@ -480,9 +486,23 @@ function autoDetectGrid() {
 
   const confidenceLabel = result.confidence >= 0.5 ? "high confidence" : "review needed";
   els.gridCalSummary.textContent = `Grid detected (${confidenceLabel}). Confirm the overlay lines match the small boxes before measuring.`;
-  setStatus("Auto-detected the grid. Confirm overlay alignment before measuring.");
+  setStatus(source === "load"
+    ? "Image loaded and grid auto-detected. Confirm overlay alignment before measuring."
+    : "Auto-detected the grid. Confirm overlay alignment before measuring.");
   render();
   updateMeasurements();
+  return true;
+}
+
+function resetImageGridCalibration() {
+  state.calibration.pxPerSmallX = 18;
+  state.calibration.pxPerSmallY = 18;
+  state.calibration.originX = 0;
+  state.calibration.originY = 0;
+  state.calibration.showGrid = true;
+  els.boxPxX.value = 18;
+  els.boxPxY.value = 18;
+  els.showGrid.checked = true;
 }
 
 function shiftGridOverlay(direction) {
@@ -726,10 +746,11 @@ function loadImageSource(src, name) {
     state.annotations = [];
     state.nextId = 1;
     state.selectedAnnotationId = null;
+    resetImageGridCalibration();
     els.emptyState.classList.add("hidden");
     fitImage();
+    autoDetectGrid({ source: "load" });
     updateMeasurements();
-    setStatus("Image loaded. Check paper speed and box calibration before measuring.");
   };
   image.onerror = () => setStatus("The selected image could not be loaded.");
   image.src = src;
