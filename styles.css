@@ -269,24 +269,6 @@ h2 {
   line-height: 1.35;
 }
 
-.advanced-calibration {
-  margin-top: 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfcfc;
-  padding: 0 10px 10px;
-}
-
-.advanced-calibration summary {
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 750;
-  cursor: pointer;
-}
-
 .measurement-list {
   list-style: decimal;
   padding-left: 20px;
