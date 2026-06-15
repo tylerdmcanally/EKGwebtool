@@ -18,6 +18,7 @@ const els = {
   calibrationBoxes: document.getElementById("calibrationBoxes"),
   gridOpacity: document.getElementById("gridOpacity"),
   showGrid: document.getElementById("showGrid"),
+  marchSteps: document.getElementById("marchSteps"),
   highlightType: document.getElementById("highlightType"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
@@ -36,6 +37,7 @@ const els = {
 const colors = {
   interval: "#0f766e",
   rr: "#b45309",
+  march: "#7c3aed",
   amplitude: "#2563eb",
   calibrate: "#111827",
   note: "#374151"
@@ -143,6 +145,7 @@ els.lockBoxes.addEventListener("change", () => {
 els.calibrationBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
+els.marchSteps.addEventListener("input", render);
 els.highlightType.addEventListener("change", render);
 
 els.undoBtn.addEventListener("click", () => {
@@ -209,6 +212,7 @@ function setTool(tool) {
     calibrate: "crosshair",
     interval: "crosshair",
     rr: "crosshair",
+    march: "crosshair",
     amplitude: "crosshair",
     highlight: "crosshair"
   };
@@ -222,6 +226,7 @@ function statusForTool(tool) {
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
+    march: "Drag to set the caliper opening, then repeated ticks march out that same spacing.",
     amplitude: "Drag vertically to measure voltage in mV.",
     highlight: "Drag a rectangle around a P wave, QRS, ST segment, T wave, or custom area.",
     note: "Click the strip to add a label.",
@@ -453,6 +458,11 @@ function drawAnnotation(targetCtx, annotation, view, isPreview = false) {
 }
 
 function drawMeasure(targetCtx, annotation, view, isPreview = false) {
+  if (annotation.type === "march") {
+    drawMarchMeasure(targetCtx, annotation, view, isPreview);
+    return;
+  }
+
   const start = toScreen(annotation.start, view);
   const end = toScreen(annotation.end, view);
   const color = annotation.color || colors[annotation.type] || colors.interval;
@@ -492,6 +502,55 @@ function drawMeasure(targetCtx, annotation, view, isPreview = false) {
   targetCtx.fill();
 
   drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(start, end), color);
+  targetCtx.restore();
+}
+
+function drawMarchMeasure(targetCtx, annotation, view, isPreview = false) {
+  const points = marchPoints(annotation);
+  if (points.length < 2) return;
+
+  const color = annotation.color || colors.march;
+  const screenPoints = points.map((point) => toScreen(point, view));
+  const first = screenPoints[0];
+  const second = screenPoints[1];
+  const last = screenPoints[screenPoints.length - 1];
+  const angle = Math.atan2(second.y - first.y, second.x - first.x);
+  const tickAngle = angle + Math.PI / 2;
+  const halfTick = 15;
+
+  targetCtx.save();
+  targetCtx.strokeStyle = color;
+  targetCtx.fillStyle = color;
+  targetCtx.globalAlpha = isPreview ? 0.74 : 1;
+  targetCtx.lineWidth = 2;
+
+  targetCtx.beginPath();
+  targetCtx.moveTo(first.x, first.y);
+  targetCtx.lineTo(second.x, second.y);
+  targetCtx.stroke();
+
+  targetCtx.setLineDash([5, 7]);
+  targetCtx.beginPath();
+  targetCtx.moveTo(first.x, first.y);
+  targetCtx.lineTo(last.x, last.y);
+  targetCtx.stroke();
+  targetCtx.setLineDash([]);
+
+  screenPoints.forEach((point, index) => {
+    const x1 = point.x + Math.cos(tickAngle) * halfTick;
+    const y1 = point.y + Math.sin(tickAngle) * halfTick;
+    const x2 = point.x - Math.cos(tickAngle) * halfTick;
+    const y2 = point.y - Math.sin(tickAngle) * halfTick;
+    targetCtx.beginPath();
+    targetCtx.moveTo(x1, y1);
+    targetCtx.lineTo(x2, y2);
+    targetCtx.stroke();
+    targetCtx.beginPath();
+    targetCtx.arc(point.x, point.y, index < 2 ? 4 : 3, 0, Math.PI * 2);
+    targetCtx.fill();
+  });
+
+  drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(first, second), color);
   targetCtx.restore();
 }
 
@@ -579,6 +638,7 @@ function previewAnnotation() {
     type: active.kind,
     start: active.start,
     end: active.end,
+    steps: active.kind === "march" ? getMarchSteps() : undefined,
     color: colors[active.kind] || colors.interval
   };
 }
@@ -681,6 +741,7 @@ function onPointerUp(event) {
       type: active.kind,
       start: active.start,
       end: active.end,
+      steps: active.kind === "march" ? getMarchSteps() : undefined,
       color: colors[active.kind] || colors.interval
     });
   }
@@ -748,6 +809,10 @@ function findAnnotationIndex(point) {
       ) {
         return index;
       }
+      continue;
+    }
+    if (annotation.type === "march") {
+      if (distanceToMarch(annotation, point) <= 10 / state.view.scale) return index;
       continue;
     }
     if (distanceToSegment(point, annotation.start, annotation.end) <= 10 / state.view.scale) {
@@ -835,6 +900,9 @@ function labelForAnnotation(annotation) {
   if (annotation.type === "rr") {
     return `${round(data.rate, 0)} bpm | ${round(data.ms, 0)} ms`;
   }
+  if (annotation.type === "march") {
+    return `${round(data.ms, 0)} ms | ${round(data.rate, 0)} bpm | ${getMarchSteps(annotation)} steps`;
+  }
   if (annotation.type === "amplitude") {
     return `${round(data.mv, 2)} mV | ${round(data.dyBoxes, 1)} mm`;
   }
@@ -852,6 +920,48 @@ function measurementData(annotation) {
   return { dx, dy, dxBoxes, dyBoxes, ms, mv, rate };
 }
 
+function getMarchSteps(annotation) {
+  const value = annotation && Number.isFinite(annotation.steps)
+    ? annotation.steps
+    : Number(els.marchSteps.value);
+  return clamp(Math.round(value) || 1, 1, 30);
+}
+
+function marchPoints(annotation) {
+  const steps = getMarchSteps(annotation);
+  const vector = {
+    x: annotation.end.x - annotation.start.x,
+    y: annotation.end.y - annotation.start.y
+  };
+  const points = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const point = {
+      x: annotation.start.x + vector.x * index,
+      y: annotation.start.y + vector.y * index
+    };
+    if (
+      state.image &&
+      (point.x < 0 || point.x > state.image.width || point.y < 0 || point.y > state.image.height)
+    ) {
+      if (index > 1) break;
+    }
+    points.push(point);
+  }
+  return points;
+}
+
+function distanceToMarch(annotation, point) {
+  const points = marchPoints(annotation);
+  let nearest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < points.length; index += 1) {
+    nearest = Math.min(nearest, distance(point, points[index]));
+    if (index > 0) {
+      nearest = Math.min(nearest, distanceToSegment(point, points[index - 1], points[index]));
+    }
+  }
+  return nearest;
+}
+
 function updateMeasurements() {
   const measures = state.annotations.filter((annotation) => annotation.kind === "measure");
   if (!measures.length) {
@@ -861,7 +971,7 @@ function updateMeasurements() {
   }
 
   const rrRates = measures
-    .filter((annotation) => annotation.type === "rr")
+    .filter((annotation) => annotation.type === "rr" || annotation.type === "march")
     .map((annotation) => measurementData(annotation).rate)
     .filter((rate) => Number.isFinite(rate) && rate > 0);
   const avgRate = rrRates.length
@@ -873,9 +983,16 @@ function updateMeasurements() {
     <span>${round(1000 / state.calibration.paperSpeed, 1)} ms per small box, ${round(1 / state.calibration.gain, 3)} mV per small box</span>
   `;
   els.measurementList.innerHTML = measures.map((annotation) => {
-    const type = annotation.type === "rr" ? "R-R" : annotation.type === "amplitude" ? "Amplitude" : "Interval";
+    const type = measurementName(annotation);
     return `<li><strong>${type}</strong>: ${labelForAnnotation(annotation)} <button type="button" aria-label="Delete measurement" data-delete-id="${annotation.id}">x</button></li>`;
   }).join("");
+}
+
+function measurementName(annotation) {
+  if (annotation.type === "rr") return "R-R";
+  if (annotation.type === "march") return "March";
+  if (annotation.type === "amplitude") return "Amplitude";
+  return "Interval";
 }
 
 function updateReadout() {
@@ -1007,7 +1124,7 @@ function reportLines() {
     return lines;
   }
   measures.forEach((annotation, index) => {
-    const name = annotation.type === "rr" ? "R-R" : annotation.type === "amplitude" ? "Amplitude" : "Interval";
+    const name = measurementName(annotation);
     lines.push(`${index + 1}. ${name}: ${labelForAnnotation(annotation)}`);
   });
   return lines;

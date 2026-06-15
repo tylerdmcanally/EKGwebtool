@@ -97,11 +97,16 @@
               <button class="tool-button" data-tool="calibrate" type="button">Calibrate</button>
               <button class="tool-button" data-tool="interval" type="button">Interval</button>
               <button class="tool-button" data-tool="rr" type="button">R-R</button>
+              <button class="tool-button" data-tool="march" type="button">March</button>
               <button class="tool-button" data-tool="amplitude" type="button">mV</button>
               <button class="tool-button" data-tool="highlight" type="button">Highlight</button>
               <button class="tool-button" data-tool="note" type="button">Note</button>
               <button class="tool-button" data-tool="erase" type="button">Erase</button>
             </div>
+            <label class="field compact">
+              <span>March steps</span>
+              <input id="marchSteps" type="number" min="1" max="30" step="1" value="8">
+            </label>
             <label class="field">
               <span>Highlight type</span>
               <select id="highlightType">

@@ -8,6 +8,7 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 - Set paper speed, gain, horizontal box spacing, and vertical box spacing.
 - Calibrate box spacing by dragging across a known number of small boxes.
 - Add interval, R-R/rate, and amplitude calipers.
+- Add marching calipers that set an interval once and repeat that spacing across the strip.
 - Highlight P waves, QRS complexes, ST segments, T waves, or custom areas.
 - Add notes, erase annotations, clear/undo, zoom, pan, and fit.
 - Export an annotated PNG or one-page PDF report.
