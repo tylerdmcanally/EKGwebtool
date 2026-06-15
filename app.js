@@ -29,6 +29,8 @@ const els = {
   timeCalSummary: document.getElementById("timeCalSummary"),
   timeCalHelp: document.getElementById("timeCalHelp"),
   highlightType: document.getElementById("highlightType"),
+  selectionText: document.getElementById("selectionText"),
+  deleteSelectedBtn: document.getElementById("deleteSelectedBtn"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
   readout: document.getElementById("readout"),
@@ -59,7 +61,8 @@ const state = {
   imageName: "",
   annotations: [],
   active: null,
-  selectedTool: "pan",
+  selectedTool: "select",
+  selectedAnnotationId: null,
   nextId: 1,
   view: {
     scale: 1,
@@ -177,7 +180,10 @@ els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.highlightType.addEventListener("change", render);
 
 els.undoBtn.addEventListener("click", () => {
-  state.annotations.pop();
+  const removed = state.annotations.pop();
+  if (removed && removed.id === state.selectedAnnotationId) {
+    state.selectedAnnotationId = null;
+  }
   render();
   updateMeasurements();
 });
@@ -185,6 +191,7 @@ els.undoBtn.addEventListener("click", () => {
 els.clearBtn.addEventListener("click", () => {
   if (!state.annotations.length) return;
   state.annotations = [];
+  state.selectedAnnotationId = null;
   render();
   updateMeasurements();
 });
@@ -195,15 +202,87 @@ els.fitBtn.addEventListener("click", fitImage);
 els.downloadPngBtn.addEventListener("click", downloadPng);
 els.downloadPdfBtn.addEventListener("click", downloadPdf);
 els.shareBtn.addEventListener("click", shareReport);
+els.deleteSelectedBtn.addEventListener("click", deleteSelectedAnnotation);
 
 els.measurementList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-delete-id]");
-  if (!button) return;
-  const id = Number(button.dataset.deleteId);
-  state.annotations = state.annotations.filter((annotation) => annotation.id !== id);
+  if (button) {
+    deleteAnnotation(Number(button.dataset.deleteId));
+    return;
+  }
+  const item = event.target.closest("[data-select-id]");
+  if (!item) return;
+  selectAnnotation(Number(item.dataset.selectId));
+});
+
+document.addEventListener("keydown", (event) => {
+  if ((event.key === "Delete" || event.key === "Backspace") && state.selectedAnnotationId !== null) {
+    if (isEditingTarget(event.target)) return;
+    event.preventDefault();
+    deleteSelectedAnnotation();
+  }
+});
+
+els.measurementList.addEventListener("dblclick", (event) => {
+  const item = event.target.closest("[data-select-id]");
+  if (!item) return;
+  deleteAnnotation(Number(item.dataset.selectId));
+});
+
+function selectAnnotation(id) {
+  state.selectedAnnotationId = id;
   render();
   updateMeasurements();
-});
+}
+
+function selectedAnnotation() {
+  return state.annotations.find((annotation) => annotation.id === state.selectedAnnotationId) || null;
+}
+
+function isSelectedAnnotation(annotation) {
+  return annotation && annotation.id === state.selectedAnnotationId;
+}
+
+function deleteSelectedAnnotation() {
+  if (state.selectedAnnotationId === null) return;
+  deleteAnnotation(state.selectedAnnotationId);
+}
+
+function deleteAnnotation(id) {
+  const before = state.annotations.length;
+  state.annotations = state.annotations.filter((annotation) => annotation.id !== id);
+  if (state.annotations.length === before) return;
+  if (state.selectedAnnotationId === id) {
+    state.selectedAnnotationId = null;
+  }
+  render();
+  updateMeasurements();
+}
+
+function updateSelectionUi() {
+  const annotation = selectedAnnotation();
+  if (!annotation) {
+    els.selectionText.textContent = "No mark selected";
+    els.deleteSelectedBtn.disabled = true;
+    return;
+  }
+  els.selectionText.textContent = `${annotationDisplayName(annotation)} selected`;
+  els.deleteSelectedBtn.disabled = false;
+}
+
+function annotationDisplayName(annotation) {
+  if (annotation.kind === "note") return "Note";
+  if (annotation.kind === "highlight") return annotation.label || "Highlight";
+  if (annotation.kind === "measure") return measurementName(annotation);
+  return "Mark";
+}
+
+function isEditingTarget(target) {
+  return Boolean(target && (
+    ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) ||
+    target.isContentEditable
+  ));
+}
 
 canvas.addEventListener("pointerdown", onPointerDown);
 canvas.addEventListener("pointermove", onPointerMove);
@@ -213,14 +292,23 @@ canvas.addEventListener("wheel", onWheel, { passive: false });
 
 document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+    if (isEditingTarget(event.target)) return;
     event.preventDefault();
-    state.annotations.pop();
+    const removed = state.annotations.pop();
+    if (removed && removed.id === state.selectedAnnotationId) {
+      state.selectedAnnotationId = null;
+    }
     render();
     updateMeasurements();
   }
   if (event.key === "Escape") {
-    state.active = null;
+    if (state.active) {
+      state.active = null;
+    } else {
+      state.selectedAnnotationId = null;
+    }
     render();
+    updateMeasurements();
   }
 });
 
@@ -234,6 +322,7 @@ function setTool(tool) {
     button.classList.toggle("active", button.dataset.tool === tool);
   });
   const cursors = {
+    select: "default",
     pan: "grab",
     erase: "not-allowed",
     note: "copy",
@@ -252,6 +341,7 @@ function setTool(tool) {
 
 function statusForTool(tool) {
   const map = {
+    select: "Click a mark to select it. Use Delete selected or the Delete key to remove it.",
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
     timecal: "Drag left-to-right across the large boxes selected in the Calibration panel.",
@@ -590,6 +680,7 @@ function loadImageSource(src, name) {
     state.imageName = name || "ekg-strip";
     state.annotations = [];
     state.nextId = 1;
+    state.selectedAnnotationId = null;
     els.emptyState.classList.add("hidden");
     fitImage();
     updateMeasurements();
@@ -799,6 +890,15 @@ function drawMeasure(targetCtx, annotation, view, isPreview = false) {
   const tick = annotation.type === "amplitude" ? 14 : 18;
 
   targetCtx.save();
+  if (!isPreview && isSelectedAnnotation(annotation)) {
+    targetCtx.strokeStyle = "rgba(15, 118, 110, 0.24)";
+    targetCtx.lineWidth = 9;
+    targetCtx.lineCap = "round";
+    targetCtx.beginPath();
+    targetCtx.moveTo(start.x, start.y);
+    targetCtx.lineTo(end.x, end.y);
+    targetCtx.stroke();
+  }
   targetCtx.strokeStyle = color;
   targetCtx.fillStyle = color;
   targetCtx.globalAlpha = isPreview ? 0.74 : 1;
@@ -827,8 +927,8 @@ function drawMeasure(targetCtx, annotation, view, isPreview = false) {
   }
 
   targetCtx.beginPath();
-  targetCtx.arc(start.x, start.y, 4, 0, Math.PI * 2);
-  targetCtx.arc(end.x, end.y, 4, 0, Math.PI * 2);
+  targetCtx.arc(start.x, start.y, isSelectedAnnotation(annotation) ? 5.5 : 4, 0, Math.PI * 2);
+  targetCtx.arc(end.x, end.y, isSelectedAnnotation(annotation) ? 5.5 : 4, 0, Math.PI * 2);
   targetCtx.fill();
 
   drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(start, end), color);
@@ -882,6 +982,15 @@ function drawMarchMeasure(targetCtx, annotation, view, isPreview = false) {
   const halfTick = 15;
 
   targetCtx.save();
+  if (!isPreview && isSelectedAnnotation(annotation)) {
+    targetCtx.strokeStyle = "rgba(15, 118, 110, 0.24)";
+    targetCtx.lineWidth = 9;
+    targetCtx.lineCap = "round";
+    targetCtx.beginPath();
+    targetCtx.moveTo(first.x, first.y);
+    targetCtx.lineTo(last.x, last.y);
+    targetCtx.stroke();
+  }
   targetCtx.strokeStyle = color;
   targetCtx.fillStyle = color;
   targetCtx.globalAlpha = isPreview ? 0.74 : 1;
@@ -932,6 +1041,13 @@ function drawHighlight(targetCtx, annotation, view, isPreview = false) {
   targetCtx.lineWidth = 2;
   targetCtx.fillRect(start.x, start.y, width, height);
   targetCtx.strokeRect(start.x, start.y, width, height);
+  if (!isPreview && isSelectedAnnotation(annotation)) {
+    targetCtx.strokeStyle = colors.interval;
+    targetCtx.lineWidth = 3;
+    targetCtx.setLineDash([6, 4]);
+    targetCtx.strokeRect(start.x - 3, start.y - 3, width + 6, height + 6);
+    targetCtx.setLineDash([]);
+  }
   drawBubble(targetCtx, annotation.label, { x: start.x + 8, y: start.y + 16 }, color);
   targetCtx.restore();
 }
@@ -946,6 +1062,13 @@ function drawNote(targetCtx, annotation, view) {
   targetCtx.arc(point.x, point.y, 6, 0, Math.PI * 2);
   targetCtx.fill();
   targetCtx.stroke();
+  if (isSelectedAnnotation(annotation)) {
+    targetCtx.strokeStyle = colors.interval;
+    targetCtx.lineWidth = 3;
+    targetCtx.beginPath();
+    targetCtx.arc(point.x, point.y, 11, 0, Math.PI * 2);
+    targetCtx.stroke();
+  }
   drawBubble(targetCtx, annotation.label, { x: point.x + 12, y: point.y - 10 }, colors.note);
   targetCtx.restore();
 }
@@ -1020,6 +1143,12 @@ function onPointerDown(event) {
   const tool = state.selectedTool;
   const point = clampToImage(toImagePoint(event));
 
+  if (tool === "select") {
+    const index = findAnnotationIndex(point);
+    selectAnnotation(index >= 0 ? state.annotations[index].id : null);
+    return;
+  }
+
   if (tool === "pan") {
     state.active = {
       kind: "pan",
@@ -1035,12 +1164,14 @@ function onPointerDown(event) {
   if (tool === "note") {
     const label = window.prompt("Note label");
     if (label && label.trim()) {
-      state.annotations.push({
+      const annotation = {
         id: state.nextId++,
         kind: "note",
         point,
         label: label.trim()
-      });
+      };
+      state.annotations.push(annotation);
+      state.selectedAnnotationId = annotation.id;
       render();
       updateMeasurements();
     }
@@ -1057,6 +1188,7 @@ function onPointerDown(event) {
     start: point,
     end: point
   };
+  state.selectedAnnotationId = null;
   render();
 }
 
@@ -1101,16 +1233,18 @@ function onPointerUp(event) {
     applyCalibration(active.start, active.end);
   } else if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
-    state.annotations.push({
+    const annotation = {
       id: state.nextId++,
       kind: "highlight",
       start: active.start,
       end: active.end,
       label: meta.label,
       color: meta.color
-    });
+    };
+    state.annotations.push(annotation);
+    state.selectedAnnotationId = annotation.id;
   } else {
-    state.annotations.push({
+    const annotation = {
       id: state.nextId++,
       kind: "measure",
       type: active.kind,
@@ -1118,7 +1252,9 @@ function onPointerUp(event) {
       end: active.end,
       steps: active.kind === "march" ? getMarchSteps() : undefined,
       color: colors[active.kind] || colors.interval
-    });
+    };
+    state.annotations.push(annotation);
+    state.selectedAnnotationId = annotation.id;
   }
 
   render();
@@ -1222,9 +1358,7 @@ function setPaperSpeed(speed) {
 function eraseAt(point) {
   const index = findAnnotationIndex(point);
   if (index >= 0) {
-    state.annotations.splice(index, 1);
-    render();
-    updateMeasurements();
+    deleteAnnotation(state.annotations[index].id);
   }
 }
 
@@ -1433,6 +1567,7 @@ function updateMeasurements() {
   if (!measures.length) {
     els.summary.innerHTML = "<span>No measurements yet.</span>";
     els.measurementList.innerHTML = "";
+    updateSelectionUi();
     return;
   }
 
@@ -1450,8 +1585,15 @@ function updateMeasurements() {
   `;
   els.measurementList.innerHTML = measures.map((annotation) => {
     const type = measurementName(annotation);
-    return `<li><strong>${type}</strong>: ${labelForAnnotation(annotation)} <button type="button" aria-label="Delete measurement" data-delete-id="${annotation.id}">x</button></li>`;
+    const selectedClass = isSelectedAnnotation(annotation) ? " selected" : "";
+    return `
+      <li class="measurement-item${selectedClass}" data-select-id="${annotation.id}" tabindex="0">
+        <span><strong>${type}</strong>: ${labelForAnnotation(annotation)}</span>
+        <button type="button" aria-label="Delete ${type}" data-delete-id="${annotation.id}">Delete</button>
+      </li>
+    `;
   }).join("");
+  updateSelectionUi();
 }
 
 function measurementName(annotation) {

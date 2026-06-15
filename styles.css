@@ -199,6 +199,11 @@ h2 {
   border-color: #9fb0aa;
 }
 
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .button.primary {
   background: var(--accent);
   color: #fff;
@@ -223,11 +228,30 @@ h2 {
   padding: 0;
 }
 
-.tool-grid {
+.tool-stack {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-group {
+  display: grid;
+  gap: 7px;
+}
+
+.tool-group > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tool-grid {
+  display: grid;
   gap: 8px;
+}
+
+.tool-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .calibration-tools {
@@ -246,6 +270,22 @@ h2 {
   background: #e4f3f0;
   border-color: var(--accent);
   color: var(--accent-strong);
+}
+
+.selection-bar {
+  margin-top: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8faf9;
+}
+
+.selection-bar span {
+  color: #394642;
+  font-size: 0.82rem;
+  font-weight: 750;
 }
 
 .summary {
@@ -295,27 +335,42 @@ h2 {
 }
 
 .measurement-list {
-  list-style: decimal;
-  padding-left: 20px;
+  list-style: none;
+  padding-left: 0;
   margin: 10px 0 0;
   display: grid;
   gap: 8px;
 }
 
-.measurement-list li {
-  padding: 9px 9px 9px 0;
+.measurement-item {
+  padding: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: #2d3834;
   font-size: 0.82rem;
   line-height: 1.35;
+  cursor: pointer;
 }
 
-.measurement-list button {
-  margin-left: 8px;
-  border: 0;
-  background: transparent;
+.measurement-item:hover,
+.measurement-item.selected {
+  border-color: var(--accent);
+  background: #eef7f4;
+}
+
+.measurement-item button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
   color: var(--danger);
   font-weight: 800;
   cursor: pointer;
+  padding: 4px 8px;
 }
 
 .checklist {
