@@ -6,6 +6,8 @@ const els = {
   demoBtn: document.getElementById("demoBtn"),
   stage: document.getElementById("stage"),
   emptyState: document.getElementById("emptyState"),
+  timeCalMode: document.getElementById("timeCalMode"),
+  paperSpeedField: document.getElementById("paperSpeedField"),
   paperSpeed: document.getElementById("paperSpeed"),
   customSpeed: document.getElementById("customSpeed"),
   customSpeedField: document.getElementById("customSpeedField"),
@@ -19,8 +21,10 @@ const els = {
   gridOpacity: document.getElementById("gridOpacity"),
   showGrid: document.getElementById("showGrid"),
   marchSteps: document.getElementById("marchSteps"),
+  knownTimeField: document.getElementById("knownTimeField"),
   knownTimeMs: document.getElementById("knownTimeMs"),
   timeLargeBoxes: document.getElementById("timeLargeBoxes"),
+  timeCalSummary: document.getElementById("timeCalSummary"),
   highlightType: document.getElementById("highlightType"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
@@ -116,6 +120,15 @@ els.stage.addEventListener("drop", (event) => {
 
 els.demoBtn.addEventListener("click", loadDemoStrip);
 
+els.timeCalMode.addEventListener("change", () => {
+  if (els.timeCalMode.value === "known" && Number(els.timeLargeBoxes.value) === 5) {
+    els.timeLargeBoxes.value = 2;
+  }
+  if (els.timeCalMode.value === "speed" && Number(els.timeLargeBoxes.value) === 2) {
+    els.timeLargeBoxes.value = 5;
+  }
+  syncCalibrationFromInputs();
+});
 els.paperSpeed.addEventListener("change", syncCalibrationFromInputs);
 els.customSpeed.addEventListener("input", syncCalibrationFromInputs);
 els.gain.addEventListener("change", syncCalibrationFromInputs);
@@ -152,8 +165,8 @@ els.calibrationBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
 els.marchSteps.addEventListener("input", render);
-els.knownTimeMs.addEventListener("input", render);
-els.timeLargeBoxes.addEventListener("input", render);
+els.knownTimeMs.addEventListener("input", syncCalibrationFromInputs);
+els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.highlightType.addEventListener("change", render);
 
 els.undoBtn.addEventListener("click", () => {
@@ -234,7 +247,7 @@ function statusForTool(tool) {
   const map = {
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
-    timecal: "Enter known time and large boxes, then drag across that box span to set the time scale.",
+    timecal: "Use the calibration panel settings, then drag across that exact large-box span.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
@@ -248,7 +261,10 @@ function statusForTool(tool) {
 }
 
 function syncCalibrationFromInputs() {
-  els.customSpeedField.classList.toggle("hidden", els.paperSpeed.value !== "custom");
+  const knownMode = els.timeCalMode.value === "known";
+  els.paperSpeedField.classList.toggle("hidden", knownMode);
+  els.knownTimeField.classList.toggle("hidden", !knownMode);
+  els.customSpeedField.classList.toggle("hidden", knownMode || els.paperSpeed.value !== "custom");
   els.customGainField.classList.toggle("hidden", els.gain.value !== "custom");
 
   state.calibration.paperSpeed = els.paperSpeed.value === "custom"
@@ -260,6 +276,7 @@ function syncCalibrationFromInputs() {
   state.calibration.calibrationBoxes = numberFromInput(els.calibrationBoxes, 5);
   state.calibration.gridOpacity = Number(els.gridOpacity.value);
   state.calibration.showGrid = els.showGrid.checked;
+  updateTimeCalibrationSummary();
 
   render();
   updateMeasurements();
@@ -280,6 +297,15 @@ function getKnownTimeMs() {
 
 function getTimeLargeBoxes() {
   return numberFromInput(els.timeLargeBoxes, 2);
+}
+
+function updateTimeCalibrationSummary() {
+  const data = timeCalibrationSettings();
+  if (els.timeCalMode.value === "known") {
+    els.timeCalSummary.textContent = `Known span: drag ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms (${round(data.paperSpeed, 2)} mm/s effective).`;
+    return;
+  }
+  els.timeCalSummary.textContent = `${round(data.paperSpeed, 2)} mm/s: drag ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms.`;
 }
 
 function loadImageFile(file) {
@@ -893,7 +919,7 @@ function applyGridAlignment(start, end) {
 function applyTimeCalibration(start, end) {
   const data = timeCalibrationData({ start, end });
   if (!Number.isFinite(data.paperSpeed) || data.dx < 4 || data.smallBoxes < 1) {
-    setStatus("Time span was too short to calculate paper speed.");
+    setStatus("Dragged span was too short to calibrate the time scale.");
     return;
   }
 
@@ -904,9 +930,12 @@ function applyTimeCalibration(start, end) {
     state.calibration.pxPerSmallY = data.pxPerSmallX;
     els.boxPxY.value = round(data.pxPerSmallX, 2);
   }
-  setPaperSpeed(data.paperSpeed);
+  if (els.timeCalMode.value === "known") {
+    setPaperSpeed(data.paperSpeed);
+  }
   const msPerLarge = data.knownMs / data.largeBoxes;
-  setStatus(`Time calibrated: ${round(data.knownMs, 0)} ms across ${round(data.largeBoxes, 2)} large boxes = ${round(data.paperSpeed, 2)} mm/s (${round(msPerLarge, 1)} ms/large box).`);
+  const sourceLabel = els.timeCalMode.value === "known" ? "Known span" : "Standard speed";
+  setStatus(`${sourceLabel} calibrated: ${round(data.knownMs, 0)} ms across ${round(data.largeBoxes, 2)} large boxes (${round(msPerLarge, 1)} ms/large box).`);
 }
 
 function setPaperSpeed(speed) {
@@ -1069,13 +1098,23 @@ function measurementData(annotation) {
 
 function timeCalibrationData(annotation) {
   const dx = Math.abs(annotation.end.x - annotation.start.x);
-  const knownMs = getKnownTimeMs();
+  const settings = timeCalibrationSettings();
+  const { knownMs, largeBoxes, smallBoxes, paperSpeed } = settings;
+  const pxPerSmallX = smallBoxes > 0 ? dx / smallBoxes : 0;
+  const msPerSmallBox = settings.msPerSmallBox;
+  return { dx, largeBoxes, smallBoxes, knownMs, pxPerSmallX, msPerSmallBox, paperSpeed };
+}
+
+function timeCalibrationSettings() {
   const largeBoxes = getTimeLargeBoxes();
   const smallBoxes = largeBoxes * 5;
-  const pxPerSmallX = smallBoxes > 0 ? dx / smallBoxes : 0;
+  const selectedSpeed = state.calibration.paperSpeed || 25;
+  const knownMs = els.timeCalMode.value === "known"
+    ? getKnownTimeMs()
+    : smallBoxes * (1000 / selectedSpeed);
   const msPerSmallBox = smallBoxes > 0 ? knownMs / smallBoxes : 0;
-  const paperSpeed = msPerSmallBox > 0 ? 1000 / msPerSmallBox : 0;
-  return { dx, largeBoxes, smallBoxes, knownMs, pxPerSmallX, msPerSmallBox, paperSpeed };
+  const paperSpeed = msPerSmallBox > 0 ? 1000 / msPerSmallBox : selectedSpeed;
+  return { largeBoxes, smallBoxes, knownMs, msPerSmallBox, paperSpeed };
 }
 
 function getMarchSteps(annotation) {

@@ -258,6 +258,17 @@ h2 {
   line-height: 1.4;
 }
 
+.calibration-summary {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #f4f8f7;
+  color: #465450;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .measurement-list {
   list-style: decimal;
   padding-left: 20px;
