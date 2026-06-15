@@ -22,7 +22,7 @@ The app defaults to 25 mm/s and 10 mm/mV. At 25 mm/s, one small 1 mm box is 40 m
 
 For reliable image measurement, use **Align Grid** first. Set `Cal boxes` to the number of small boxes you are spanning, commonly 5 for one large ECG box, then drag a rectangle over that same box span on the uploaded strip. This sets the overlay origin plus horizontal and vertical pixel spacing. Leave `Lock square boxes` off unless the image is known to be undistorted.
 
-If paper speed is uncertain but a known time span is visible, use **Time Span** after grid alignment. Enter the known duration in milliseconds, then drag across that time span. The app calculates `small boxes = dragged pixels / px per small box`, `ms per small box = known ms / small boxes`, and `paper speed = 1000 / ms per small box`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which is 25 mm/s.
+For interval calibration, use **Time Span**. Enter the known duration and the number of large boxes that duration spans, then drag across those same large boxes on the uploaded strip. The app calculates `small boxes = large boxes * 5`, `px per small box = dragged pixels / small boxes`, `ms per small box = known ms / small boxes`, and `paper speed = 1000 / ms per small box`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which is 25 mm/s.
 
 ECG interpretation is broader than caliper measurement. A systematic review usually includes rate, rhythm regularity, P-wave presence/morphology, PR interval, QRS duration/morphology, QT/QTc context, ST-segment/T-wave changes, artifact, and calibration. This app helps document and measure those findings; it does not diagnose.
 

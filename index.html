@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EKG Caliper Studio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M8 34h11l5-14 8 28 6-22 4 8h14' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260615-timecal">
-    <script src="app.js?v=20260615-timecal" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260615-timebox">
+    <script src="app.js?v=20260615-timebox" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -93,10 +93,16 @@
               <button class="tool-button" data-tool="gridalign" type="button">Align Grid</button>
               <button class="tool-button" data-tool="timecal" type="button">Time Span</button>
             </div>
-            <label class="field compact">
-              <span>Known time ms</span>
-              <input id="knownTimeMs" type="number" min="1" step="10" value="400">
-            </label>
+            <div class="two-column">
+              <label class="field compact">
+                <span>Known time ms</span>
+                <input id="knownTimeMs" type="number" min="1" step="10" value="400">
+              </label>
+              <label class="field compact">
+                <span>Large boxes</span>
+                <input id="timeLargeBoxes" type="number" min="0.2" step="0.2" value="2">
+              </label>
+            </div>
           </section>
 
           <section class="panel-section">

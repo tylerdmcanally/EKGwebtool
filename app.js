@@ -20,6 +20,7 @@ const els = {
   showGrid: document.getElementById("showGrid"),
   marchSteps: document.getElementById("marchSteps"),
   knownTimeMs: document.getElementById("knownTimeMs"),
+  timeLargeBoxes: document.getElementById("timeLargeBoxes"),
   highlightType: document.getElementById("highlightType"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
@@ -152,6 +153,7 @@ els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
 els.marchSteps.addEventListener("input", render);
 els.knownTimeMs.addEventListener("input", render);
+els.timeLargeBoxes.addEventListener("input", render);
 els.highlightType.addEventListener("change", render);
 
 els.undoBtn.addEventListener("click", () => {
@@ -232,7 +234,7 @@ function statusForTool(tool) {
   const map = {
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
-    timecal: "Enter the known duration, then drag across that time span to calculate paper speed.",
+    timecal: "Enter known time and large boxes, then drag across that box span to set the time scale.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
@@ -274,6 +276,10 @@ function getCalibrationBoxCount() {
 
 function getKnownTimeMs() {
   return numberFromInput(els.knownTimeMs, 400);
+}
+
+function getTimeLargeBoxes() {
+  return numberFromInput(els.timeLargeBoxes, 2);
 }
 
 function loadImageFile(file) {
@@ -886,15 +892,21 @@ function applyGridAlignment(start, end) {
 
 function applyTimeCalibration(start, end) {
   const data = timeCalibrationData({ start, end });
-  if (!Number.isFinite(data.paperSpeed) || data.smallBoxes < 0.5) {
+  if (!Number.isFinite(data.paperSpeed) || data.dx < 4 || data.smallBoxes < 1) {
     setStatus("Time span was too short to calculate paper speed.");
     return;
   }
 
+  state.calibration.pxPerSmallX = data.pxPerSmallX;
+  state.calibration.originX = Math.min(start.x, end.x);
+  els.boxPxX.value = round(data.pxPerSmallX, 2);
+  if (state.calibration.lockBoxes) {
+    state.calibration.pxPerSmallY = data.pxPerSmallX;
+    els.boxPxY.value = round(data.pxPerSmallX, 2);
+  }
   setPaperSpeed(data.paperSpeed);
-  const largeBoxes = data.smallBoxes / 5;
-  const msPerLarge = largeBoxes > 0 ? data.knownMs / largeBoxes : 0;
-  setStatus(`Time calibrated: ${round(data.knownMs, 0)} ms across ${round(data.smallBoxes, 2)} small boxes = ${round(data.paperSpeed, 2)} mm/s (${round(msPerLarge, 1)} ms/large box).`);
+  const msPerLarge = data.knownMs / data.largeBoxes;
+  setStatus(`Time calibrated: ${round(data.knownMs, 0)} ms across ${round(data.largeBoxes, 2)} large boxes = ${round(data.paperSpeed, 2)} mm/s (${round(msPerLarge, 1)} ms/large box).`);
 }
 
 function setPaperSpeed(speed) {
@@ -1022,7 +1034,7 @@ function selectedHighlightMeta() {
 function labelForAnnotation(annotation) {
   if (annotation.type === "timecal") {
     const data = timeCalibrationData(annotation);
-    return `${round(data.knownMs, 0)} ms | ${round(data.paperSpeed, 2)} mm/s`;
+    return `${round(data.knownMs, 0)} ms / ${round(data.largeBoxes, 2)} large boxes | ${round(data.paperSpeed, 2)} mm/s`;
   }
   if (annotation.kind === "calibration" || annotation.type === "calibrate") {
     const dx = Math.abs(annotation.end.x - annotation.start.x);
@@ -1057,11 +1069,13 @@ function measurementData(annotation) {
 
 function timeCalibrationData(annotation) {
   const dx = Math.abs(annotation.end.x - annotation.start.x);
-  const smallBoxes = dx / state.calibration.pxPerSmallX;
   const knownMs = getKnownTimeMs();
+  const largeBoxes = getTimeLargeBoxes();
+  const smallBoxes = largeBoxes * 5;
+  const pxPerSmallX = smallBoxes > 0 ? dx / smallBoxes : 0;
   const msPerSmallBox = smallBoxes > 0 ? knownMs / smallBoxes : 0;
   const paperSpeed = msPerSmallBox > 0 ? 1000 / msPerSmallBox : 0;
-  return { dx, smallBoxes, knownMs, msPerSmallBox, paperSpeed };
+  return { dx, largeBoxes, smallBoxes, knownMs, pxPerSmallX, msPerSmallBox, paperSpeed };
 }
 
 function getMarchSteps(annotation) {
