@@ -584,10 +584,6 @@ function normalizeDetectedGridSpacing(xSpacing, ySpacing) {
   }
 
   const ratio = ySpacing / xSpacing;
-  if (ratio > 0.85 && ratio < 1.18) {
-    const average = (xSpacing + ySpacing) / 2;
-    return { x: average, y: average };
-  }
   if (ratio < 0.65 || ratio > 1.55) {
     return { x: xSpacing, y: xSpacing };
   }
@@ -630,7 +626,11 @@ function estimateGridAxis(profile) {
   if (!best) return null;
   const refined = refinePeriod(signal, best.period, best.phase, total);
   if (refined && (refined.score > best.score || refined.period < best.period)) {
-    return refined;
+    best = refined;
+  }
+  const fractional = refineFractionalPeriod(signal, best, total);
+  if (fractional && fractional.score >= best.score * 0.92) {
+    best = fractional;
   }
   return best;
 }
@@ -703,6 +703,47 @@ function refinePeriod(signal, period, phase, total) {
     }
   });
   return best;
+}
+
+function refineFractionalPeriod(signal, estimate, total) {
+  const maxPeriod = Math.min(70, Math.floor(signal.length / 4));
+  let best = estimate;
+  const coarseStart = clamp(estimate.period - 0.8, 4, maxPeriod);
+  const coarseEnd = clamp(estimate.period + 0.8, 4, maxPeriod);
+
+  for (let period = coarseStart; period <= coarseEnd + 0.0001; period += 0.05) {
+    const fit = bestPhaseForFractionalPeriod(signal, period, total, 0.25);
+    if (fit.score > best.score) {
+      best = { period, ...fit };
+    }
+  }
+
+  const fineStart = clamp(best.period - 0.08, 4, maxPeriod);
+  const fineEnd = clamp(best.period + 0.08, 4, maxPeriod);
+  for (let period = fineStart; period <= fineEnd + 0.0001; period += 0.01) {
+    const fit = bestPhaseForFractionalPeriod(signal, period, total, 0.05, best.phase - 0.35, best.phase + 0.35);
+    if (fit.score > best.score) {
+      best = { period, ...fit };
+    }
+  }
+
+  return best;
+}
+
+function bestPhaseForFractionalPeriod(signal, period, total, step, start = 0, end = period) {
+  let best = { phase: 0, score: 0, confidence: 0 };
+  for (let phase = start; phase <= end + 0.0001; phase += step) {
+    const normalizedPhase = wrapPhase(phase, period);
+    const fit = gridFitScore(signal, period, normalizedPhase, total);
+    if (fit.score > best.score) {
+      best = { phase: normalizedPhase, ...fit };
+    }
+  }
+  return best;
+}
+
+function wrapPhase(phase, period) {
+  return ((phase % period) + period) % period;
 }
 
 function smoothProfile(profile, radius) {
