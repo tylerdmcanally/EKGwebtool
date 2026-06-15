@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EKG Caliper Studio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M8 34h11l5-14 8 28 6-22 4 8h14' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260615-major-phase">
-    <script src="app.js?v=20260615-major-phase" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260615-privacy">
+    <script src="app.js?v=20260615-privacy" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -31,7 +31,23 @@
               <span>Upload strip image</span>
             </label>
             <button class="button full" id="demoBtn" type="button">Demo strip</button>
-            <p class="fine-print">Images stay in this browser session unless exported.</p>
+            <p class="fine-print">Images stay in this browser session unless exported. Source filenames are not included in reports.</p>
+          </section>
+
+          <section class="panel-section">
+            <h2>Privacy</h2>
+            <label class="check-row privacy-check">
+              <input id="privacyReviewed" type="checkbox">
+              <span>PHI scrub reviewed</span>
+            </label>
+            <div class="privacy-summary" id="privacySummary">Review the strip for patient names, MRNs, dates, facility labels, and other identifiers before export.</div>
+            <div class="privacy-actions" role="toolbar" aria-label="Privacy tools">
+              <button class="tool-button" data-tool="redact" type="button">Redact area</button>
+              <button class="tool-button" id="headerRedactBtn" type="button">Block top header</button>
+              <button class="tool-button" id="applyRedactionsBtn" type="button">Apply redactions</button>
+              <button class="tool-button danger" id="clearRedactionsBtn" type="button">Clear redactions</button>
+            </div>
+            <p class="fine-print">Black redactions are included in PNG, PDF, and share exports. Apply redactions to bake them into the working image.</p>
           </section>
 
           <section class="panel-section">
@@ -221,6 +237,7 @@
               <button class="tool-chip" data-tool="march" type="button" title="March calipers (M)">March</button>
               <button class="tool-chip" data-tool="amplitude" type="button" title="Voltage caliper (V)">mV</button>
               <button class="tool-chip" data-tool="highlight" type="button" title="Highlight waveform (H)">Highlight</button>
+              <button class="tool-chip" data-tool="redact" type="button" title="Redact PHI (X)">Redact</button>
               <button class="tool-chip danger" id="quickDeleteBtn" type="button" title="Delete selected mark" disabled>Delete</button>
             </div>
             <div class="readout" id="readout">Upload an image or load the demo strip.</div>

@@ -4,6 +4,11 @@ const ctx = canvas.getContext("2d");
 const els = {
   imageInput: document.getElementById("imageInput"),
   demoBtn: document.getElementById("demoBtn"),
+  privacyReviewed: document.getElementById("privacyReviewed"),
+  privacySummary: document.getElementById("privacySummary"),
+  headerRedactBtn: document.getElementById("headerRedactBtn"),
+  applyRedactionsBtn: document.getElementById("applyRedactionsBtn"),
+  clearRedactionsBtn: document.getElementById("clearRedactionsBtn"),
   stage: document.getElementById("stage"),
   emptyState: document.getElementById("emptyState"),
   timeCalMode: document.getElementById("timeCalMode"),
@@ -58,6 +63,7 @@ const colors = {
   gridalign: "#be123c",
   timecal: "#0369a1",
   calibrate: "#111827",
+  redact: "#050505",
   note: "#374151"
 };
 
@@ -69,6 +75,7 @@ const state = {
   selectedTool: "select",
   selectedAnnotationId: null,
   nextId: 1,
+  privacyReviewed: false,
   view: {
     scale: 1,
     offsetX: 0,
@@ -130,6 +137,13 @@ els.stage.addEventListener("drop", (event) => {
 });
 
 els.demoBtn.addEventListener("click", loadDemoStrip);
+els.privacyReviewed.addEventListener("change", () => {
+  state.privacyReviewed = els.privacyReviewed.checked;
+  updatePrivacyUi();
+});
+els.headerRedactBtn.addEventListener("click", addHeaderRedaction);
+els.applyRedactionsBtn.addEventListener("click", applyRedactionsToImage);
+els.clearRedactionsBtn.addEventListener("click", clearRedactions);
 
 els.timeCalMode.addEventListener("change", () => {
   if (els.timeCalMode.value === "known" && Number(els.timeLargeBoxes.value) === 5) {
@@ -195,20 +209,11 @@ els.highlightChoices.forEach((button) => {
 });
 
 els.undoBtn.addEventListener("click", () => {
-  const removed = state.annotations.pop();
-  if (removed && removed.id === state.selectedAnnotationId) {
-    state.selectedAnnotationId = null;
-  }
-  render();
-  updateMeasurements();
+  undoLastNonRedaction();
 });
 
 els.clearBtn.addEventListener("click", () => {
-  if (!state.annotations.length) return;
-  state.annotations = [];
-  state.selectedAnnotationId = null;
-  render();
-  updateMeasurements();
+  clearNonPrivacyAnnotations();
 });
 
 els.zoomInBtn.addEventListener("click", () => zoomAtCenter(1.2));
@@ -266,14 +271,170 @@ function deleteSelectedAnnotation() {
 }
 
 function deleteAnnotation(id) {
+  const removedAnnotation = state.annotations.find((annotation) => annotation.id === id);
   const before = state.annotations.length;
   state.annotations = state.annotations.filter((annotation) => annotation.id !== id);
   if (state.annotations.length === before) return;
   if (state.selectedAnnotationId === id) {
     state.selectedAnnotationId = null;
   }
+  if (removedAnnotation && removedAnnotation.kind === "redaction") {
+    requirePrivacyReview();
+  }
   render();
   updateMeasurements();
+}
+
+function undoLastNonRedaction() {
+  const index = findLastAnnotationIndex((annotation) => annotation.kind !== "redaction");
+  if (index < 0) {
+    setStatus("No measurement or markup to undo. Redactions are kept until explicitly deleted or cleared.");
+    return;
+  }
+  const removed = state.annotations.splice(index, 1)[0];
+  if (removed && removed.id === state.selectedAnnotationId) {
+    state.selectedAnnotationId = null;
+  }
+  render();
+  updateMeasurements();
+}
+
+function clearNonPrivacyAnnotations() {
+  const before = state.annotations.length;
+  state.annotations = state.annotations.filter((annotation) => annotation.kind === "redaction");
+  if (state.annotations.length === before) return;
+  const selected = selectedAnnotation();
+  if (!selected || selected.kind !== "redaction") {
+    state.selectedAnnotationId = null;
+  }
+  render();
+  updateMeasurements();
+}
+
+function findLastAnnotationIndex(predicate) {
+  for (let index = state.annotations.length - 1; index >= 0; index -= 1) {
+    if (predicate(state.annotations[index])) return index;
+  }
+  return -1;
+}
+
+function addHeaderRedaction() {
+  if (!state.image) {
+    setStatus("Load an image before adding a PHI header redaction.");
+    return;
+  }
+  const maxHeight = Math.max(1, Math.round(state.image.height * 0.35));
+  const minHeight = Math.min(maxHeight, 72);
+  const headerHeight = clamp(Math.round(state.image.height * 0.16), minHeight, maxHeight);
+  const annotation = {
+    id: state.nextId++,
+    kind: "redaction",
+    start: { x: 0, y: 0 },
+    end: { x: state.image.width, y: headerHeight }
+  };
+  state.annotations.push(annotation);
+  state.selectedAnnotationId = annotation.id;
+  requirePrivacyReview();
+  setStatus("Top header redaction added. Resize it if the PHI area is larger or smaller.");
+  render();
+  updateMeasurements();
+}
+
+function clearRedactions() {
+  const before = state.annotations.length;
+  state.annotations = state.annotations.filter((annotation) => annotation.kind !== "redaction");
+  if (state.annotations.length === before) return;
+  const selected = selectedAnnotation();
+  if (!selected || selected.kind === "redaction") {
+    state.selectedAnnotationId = null;
+  }
+  requirePrivacyReview();
+  setStatus("Redactions cleared. Review the image again before export.");
+  render();
+  updateMeasurements();
+}
+
+function applyRedactionsToImage() {
+  if (!state.image) {
+    setStatus("Load an image before applying redactions.");
+    return;
+  }
+  const redactions = redactionAnnotations();
+  if (!redactions.length) {
+    setStatus("No redactions to apply.");
+    return;
+  }
+
+  const scrubbed = document.createElement("canvas");
+  scrubbed.width = state.image.width;
+  scrubbed.height = state.image.height;
+  const scrubbedCtx = scrubbed.getContext("2d");
+  scrubbedCtx.drawImage(state.image, 0, 0);
+  fillRedactionRects(scrubbedCtx, redactions);
+
+  const image = new Image();
+  image.onload = () => {
+    state.image = image;
+    state.annotations = state.annotations.filter((annotation) => annotation.kind !== "redaction");
+    const selected = selectedAnnotation();
+    if (!selected) {
+      state.selectedAnnotationId = null;
+    }
+    requirePrivacyReview();
+    setStatus("Redactions applied to the working image. Perform final PHI review before export.");
+    render();
+    updateMeasurements();
+  };
+  image.onerror = () => setStatus("Could not apply redactions to the image.");
+  image.src = scrubbed.toDataURL("image/png");
+}
+
+function fillRedactionRects(targetCtx, redactions) {
+  targetCtx.save();
+  targetCtx.fillStyle = "#050505";
+  redactions.forEach((annotation) => {
+    const rect = normalizedRect(annotation.start, annotation.end);
+    targetCtx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  });
+  targetCtx.restore();
+}
+
+function redactionAnnotations() {
+  return state.annotations.filter((annotation) => annotation.kind === "redaction");
+}
+
+function requirePrivacyReview() {
+  state.privacyReviewed = false;
+  els.privacyReviewed.checked = false;
+  updatePrivacyUi();
+}
+
+function updatePrivacyUi() {
+  const redactionCount = redactionAnnotations().length;
+  const loaded = Boolean(state.image);
+  els.headerRedactBtn.disabled = !loaded;
+  els.applyRedactionsBtn.disabled = !loaded || redactionCount === 0;
+  els.clearRedactionsBtn.disabled = !loaded || redactionCount === 0;
+  els.privacyReviewed.disabled = !loaded;
+
+  if (!loaded) {
+    els.privacySummary.classList.remove("reviewed");
+    els.privacySummary.textContent = "Load a strip, redact visible identifiers, then mark PHI scrub reviewed before export.";
+    return;
+  }
+
+  els.privacySummary.classList.toggle("reviewed", state.privacyReviewed);
+  const redactionText = `${redactionCount} active redaction${redactionCount === 1 ? "" : "s"}`;
+  els.privacySummary.textContent = state.privacyReviewed
+    ? `PHI scrub reviewed. ${redactionText}. Exports are enabled.`
+    : `PHI scrub required before export. ${redactionText}. Redact names, MRNs, dates, and other identifiers.`;
+}
+
+function canExportWithPrivacyReview(action) {
+  if (state.privacyReviewed) return true;
+  setStatus(`PHI scrub review is required before ${action}. Redact identifiers, then check PHI scrub reviewed.`);
+  els.privacyReviewed.focus();
+  return false;
 }
 
 function updateSelectionUi() {
@@ -295,6 +456,7 @@ function updateSelectionUi() {
 }
 
 function annotationDisplayName(annotation) {
+  if (annotation.kind === "redaction") return "Redaction";
   if (annotation.kind === "note") return "Note";
   if (annotation.kind === "highlight") return annotation.label || "Highlight";
   if (annotation.kind === "measure") return measurementName(annotation);
@@ -324,12 +486,7 @@ document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
     if (isEditingTarget(event.target)) return;
     event.preventDefault();
-    const removed = state.annotations.pop();
-    if (removed && removed.id === state.selectedAnnotationId) {
-      state.selectedAnnotationId = null;
-    }
-    render();
-    updateMeasurements();
+    undoLastNonRedaction();
   }
   if (event.key === "Escape") {
     if (state.active) {
@@ -344,6 +501,7 @@ document.addEventListener("keydown", (event) => {
 
 syncCalibrationFromInputs();
 syncHighlightPicker();
+updatePrivacyUi();
 render();
 updateMeasurements();
 
@@ -356,6 +514,7 @@ function toolForShortcut(key) {
     m: "march",
     v: "amplitude",
     h: "highlight",
+    x: "redact",
     n: "note"
   };
   return map[String(key || "").toLowerCase()] || null;
@@ -374,6 +533,7 @@ function setTool(tool) {
     gridalign: "crosshair",
     timecal: "crosshair",
     calibrate: "crosshair",
+    redact: "crosshair",
     interval: "crosshair",
     rr: "crosshair",
     march: "crosshair",
@@ -391,6 +551,7 @@ function statusForTool(tool) {
     gridalign: "Drag a rectangle over known small boxes to align and size the grid overlay.",
     timecal: "Drag left-to-right across the large boxes selected in the Calibration panel.",
     calibrate: "Drag across a known number of small boxes to set image spacing.",
+    redact: "Drag over visible PHI or identifiers. Black redactions are included in exports.",
     interval: "Drag horizontally across an interval to measure milliseconds.",
     rr: "Drag between R waves to estimate rate from the R-R interval.",
     march: "Drag to set the caliper opening, then repeated ticks march out that same spacing.",
@@ -853,11 +1014,11 @@ function quantile(values, q) {
 
 function loadImageFile(file) {
   const reader = new FileReader();
-  reader.onload = () => loadImageSource(String(reader.result), file.name);
+  reader.onload = () => loadImageSource(String(reader.result), "uploaded-ekg-strip");
   reader.readAsDataURL(file);
 }
 
-function loadImageSource(src, name) {
+function loadImageSource(src, name, options = {}) {
   const image = new Image();
   image.onload = () => {
     state.image = image;
@@ -865,10 +1026,13 @@ function loadImageSource(src, name) {
     state.annotations = [];
     state.nextId = 1;
     state.selectedAnnotationId = null;
+    state.privacyReviewed = Boolean(options.privacyReviewed);
+    els.privacyReviewed.checked = state.privacyReviewed;
     resetImageGridCalibration();
     els.emptyState.classList.add("hidden");
     fitImage();
     autoDetectGrid({ source: "load" });
+    updatePrivacyUi();
     updateMeasurements();
   };
   image.onerror = () => setStatus("The selected image could not be loaded.");
@@ -908,7 +1072,7 @@ function loadDemoStrip() {
   state.calibration.originY = 0;
   els.boxPxX.value = small;
   els.boxPxY.value = small;
-  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip.png");
+  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip", { privacyReviewed: true });
 }
 
 function drawDemoGrid(dctx, width, height, small) {
@@ -993,9 +1157,20 @@ function renderScene(targetCtx, view, width, height, options = {}) {
     drawGrid(targetCtx, view);
   }
 
-  state.annotations.forEach((annotation) => drawAnnotation(targetCtx, annotation, view));
-  if (options.showActive && state.active && state.active.kind !== "pan" && state.active.kind !== "edit") {
-    drawAnnotation(targetCtx, previewAnnotation(), view, true);
+  const activePreview = options.showActive && state.active && state.active.kind !== "pan" && state.active.kind !== "edit"
+    ? previewAnnotation()
+    : null;
+  state.annotations
+    .filter((annotation) => annotation.kind !== "redaction")
+    .forEach((annotation) => drawAnnotation(targetCtx, annotation, view));
+  if (activePreview && activePreview.kind !== "redaction") {
+    drawAnnotation(targetCtx, activePreview, view, true);
+  }
+  state.annotations
+    .filter((annotation) => annotation.kind === "redaction")
+    .forEach((annotation) => drawAnnotation(targetCtx, annotation, view));
+  if (activePreview && activePreview.kind === "redaction") {
+    drawAnnotation(targetCtx, activePreview, view, true);
   }
 }
 
@@ -1048,6 +1223,10 @@ function drawGrid(targetCtx, view) {
 }
 
 function drawAnnotation(targetCtx, annotation, view, isPreview = false) {
+  if (annotation.kind === "redaction") {
+    drawRedaction(targetCtx, annotation, view, isPreview);
+    return;
+  }
   if (annotation.kind === "gridalign") {
     drawGridAlignPreview(targetCtx, annotation, view);
     return;
@@ -1061,6 +1240,21 @@ function drawAnnotation(targetCtx, annotation, view, isPreview = false) {
     return;
   }
   drawMeasure(targetCtx, annotation, view, isPreview);
+}
+
+function drawRedaction(targetCtx, annotation, view, isPreview = false) {
+  const rect = normalizedRect(annotation.start, annotation.end);
+  const start = toScreen({ x: rect.x, y: rect.y }, view);
+  const width = rect.width * view.scale;
+  const height = rect.height * view.scale;
+  targetCtx.save();
+  targetCtx.fillStyle = isPreview ? "rgba(5, 5, 5, 0.72)" : "#050505";
+  targetCtx.fillRect(start.x, start.y, width, height);
+  targetCtx.strokeStyle = isPreview || isSelectedAnnotation(annotation) ? "#ffffff" : "rgba(255, 255, 255, 0.65)";
+  targetCtx.lineWidth = isSelectedAnnotation(annotation) ? 3 : 1.5;
+  targetCtx.setLineDash(isPreview ? [8, 5] : []);
+  targetCtx.strokeRect(start.x + 0.75, start.y + 0.75, Math.max(0, width - 1.5), Math.max(0, height - 1.5));
+  targetCtx.restore();
 }
 
 function drawMeasure(targetCtx, annotation, view, isPreview = false) {
@@ -1323,6 +1517,14 @@ function previewAnnotation() {
       end: active.end
     };
   }
+  if (active.kind === "redact") {
+    return {
+      id: 0,
+      kind: "redaction",
+      start: active.start,
+      end: active.end
+    };
+  }
   if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
     return {
@@ -1390,6 +1592,7 @@ function onPointerDown(event) {
       };
       state.annotations.push(annotation);
       state.selectedAnnotationId = annotation.id;
+      requirePrivacyReview();
       render();
       updateMeasurements();
     }
@@ -1467,6 +1670,17 @@ function onPointerUp(event) {
     applyTimeCalibration(active.start, active.end);
   } else if (active.kind === "calibrate") {
     applyCalibration(active.start, active.end);
+  } else if (active.kind === "redact") {
+    const annotation = {
+      id: state.nextId++,
+      kind: "redaction",
+      start: active.start,
+      end: active.end
+    };
+    state.annotations.push(annotation);
+    state.selectedAnnotationId = annotation.id;
+    requirePrivacyReview();
+    setStatus("Redaction added. Review all visible identifiers before export.");
   } else if (active.kind === "highlight") {
     const meta = selectedHighlightMeta();
     const annotation = {
@@ -1502,14 +1716,17 @@ function updateEditedAnnotation(active, point) {
   if (!annotation) return;
   if (active.handle === "point") {
     annotation.point = point;
+    if (annotation.kind === "redaction") requirePrivacyReview();
     return;
   }
   if (active.handle === "start") {
     annotation.start = point;
+    if (annotation.kind === "redaction") requirePrivacyReview();
     return;
   }
   if (active.handle === "end") {
     annotation.end = point;
+    if (annotation.kind === "redaction") requirePrivacyReview();
   }
 }
 
@@ -1643,6 +1860,18 @@ function eraseAt(point) {
 function findAnnotationIndex(point) {
   for (let index = state.annotations.length - 1; index >= 0; index -= 1) {
     const annotation = state.annotations[index];
+    if (annotation.kind === "redaction") {
+      const rect = normalizedRect(annotation.start, annotation.end);
+      if (
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.width &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.height
+      ) {
+        return index;
+      }
+      continue;
+    }
     if (annotation.kind === "note") {
       if (distance(point, annotation.point) <= 14 / state.view.scale) return index;
       continue;
@@ -1906,6 +2135,7 @@ async function downloadPng() {
     setStatus("Load an image before exporting.");
     return;
   }
+  if (!canExportWithPrivacyReview("PNG export")) return;
   const report = createReportCanvas();
   const blob = await canvasToBlob(report, "image/png");
   downloadBlob(blob, filenameBase() + "-annotated.png");
@@ -1916,6 +2146,7 @@ async function downloadPdf() {
     setStatus("Load an image before exporting.");
     return;
   }
+  if (!canExportWithPrivacyReview("PDF export")) return;
   const blob = await createPdfBlob();
   downloadBlob(blob, filenameBase() + "-annotated.pdf");
 }
@@ -1925,6 +2156,7 @@ async function shareReport() {
     setStatus("Load an image before sharing.");
     return;
   }
+  if (!canExportWithPrivacyReview("sharing")) return;
   const blob = await createPdfBlob();
   const file = new File([blob], filenameBase() + "-annotated.pdf", { type: "application/pdf" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1959,7 +2191,7 @@ function createReportCanvas() {
   reportCtx.fillText("EKG Caliper Studio Report", 48, 62);
   reportCtx.font = "500 18px Inter, Arial, sans-serif";
   reportCtx.fillStyle = "#52605b";
-  reportCtx.fillText(`${state.imageName} | ${new Date().toLocaleString()}`, 48, 94);
+  reportCtx.fillText(`PHI scrub reviewed | Generated ${new Date().toLocaleString()}`, 48, 94);
 
   const imageSlot = { x: 48, y: 130, width: 1240, height: 980 };
   const panel = { x: 1326, y: 130, width: 426, height: 980 };
@@ -2105,11 +2337,7 @@ function downloadBlob(blob, filename) {
 }
 
 function filenameBase() {
-  return (state.imageName || "ekg-strip")
-    .replace(/\.[a-z0-9]+$/i, "")
-    .replace(/[^a-z0-9_-]+/gi, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase() || "ekg-strip";
+  return "ekg-report";
 }
 
 function normalizedRect(start, end) {

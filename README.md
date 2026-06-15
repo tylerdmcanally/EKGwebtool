@@ -5,6 +5,9 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 ## First Pass Scope
 
 - Upload or drag-drop an EKG/rhythm strip image.
+- Redact visible PHI or identifiers with black mask rectangles before export.
+- Add a one-click top header redaction for common EKG printout demographics.
+- Require PHI scrub review before PNG, PDF, or share export.
 - Auto-detect visible ECG paper grids on image load and align the measurement overlay.
 - Set paper speed or use a known time marker on the strip to calibrate intervals.
 - Set gain for voltage measurement.
@@ -19,6 +22,14 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 - Select marks from the strip or measurement list, drag selected endpoints to adjust them, then delete the selected mark from the panel, workspace toolbar, or Delete/Backspace key.
 - Export an annotated PNG or one-page PDF report.
 - Share through the browser Web Share API when available; otherwise download the PDF and open an email draft.
+
+## Privacy Handling
+
+The app is static and client-side: uploaded images are processed in the browser and are not sent to a server by this site. The export workflow still treats visible identifiers as sensitive. Uploaded source filenames are not included in generated reports, and exported files use a generic `ekg-report` name.
+
+Use **Redact area** to draw black masks over names, MRNs, DOBs, accession numbers, facility labels, timestamps tied to the patient, or any other visible identifier. **Block top header** adds a quick full-width mask over the common demographics area. Redactions are included in PNG, PDF, and share exports. **Apply redactions** bakes active masks into the working image and removes the editable mask layer.
+
+Exports are blocked until **PHI scrub reviewed** is checked. This is a workflow control, not automated de-identification or OCR. The user still needs to visually inspect the entire image before exporting or sharing.
 
 ## Clinical Measurement Defaults
 
@@ -41,6 +52,7 @@ ECG interpretation is broader than caliper measurement. A systematic review usua
 ## Limitations
 
 - No uploaded image is stored or shared by the site. Sharing is file-based through the user's browser.
+- PHI redaction is manual. The app does not certify HIPAA de-identification and cannot guarantee that all identifiers are removed.
 - Camera perspective, skew, and nonuniform resizing can affect measurements. Use the calibration tool on the actual image before measuring.
 - The app assumes a straight horizontal time axis and vertical voltage axis.
 - This is for education, review, and documentation only. It is not a diagnostic medical device or a replacement for clinician interpretation.
@@ -49,3 +61,4 @@ ECG interpretation is broader than caliper measurement. A systematic review usua
 
 - NCBI Bookshelf StatPearls, "Electrocardiogram": https://www.ncbi.nlm.nih.gov/books/NBK549803/
 - AHA/ACCF/HRS ECG standardization statement, Part I technical standards: https://doi.org/10.1161/CIRCULATIONAHA.106.180200
+- HHS OCR HIPAA de-identification guidance: https://www.hhs.gov/hipaa/for-professionals/special-topics/de-identification/index.html

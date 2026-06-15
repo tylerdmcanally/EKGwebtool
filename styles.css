@@ -200,7 +200,8 @@ h2 {
   border-color: #9fb0aa;
 }
 
-.button:disabled {
+.button:disabled,
+.tool-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -215,7 +216,8 @@ h2 {
   background: #f8faf9;
 }
 
-.button.danger {
+.button.danger,
+.tool-button.danger {
   color: var(--danger);
 }
 
@@ -284,6 +286,13 @@ h2 {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.privacy-actions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -381,6 +390,24 @@ h2 {
   font-size: 0.8rem;
   font-weight: 650;
   line-height: 1.35;
+}
+
+.privacy-summary {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid #f5c2c7;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #7f1d1d;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.privacy-summary.reviewed {
+  border-color: #a7d8cf;
+  background: #f0fdfa;
+  color: var(--accent-strong);
 }
 
 .calibration-help {
