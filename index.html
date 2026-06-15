@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EKG Caliper Studio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M8 34h11l5-14 8 28 6-22 4 8h14' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260615-workspace-flow">
-    <script src="app.js?v=20260615-workspace-flow" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260615-tool-workflow">
+    <script src="app.js?v=20260615-tool-workflow" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -187,6 +187,16 @@
               <button class="button square" id="zoomOutBtn" type="button" aria-label="Zoom out">-</button>
               <button class="button" id="fitBtn" type="button">Fit screen</button>
               <button class="button square" id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+            </div>
+            <div class="workspace-tools" role="toolbar" aria-label="Quick annotation tools">
+              <button class="tool-chip active" data-tool="select" type="button" title="Select marks (S)">Select</button>
+              <button class="tool-chip" data-tool="pan" type="button" title="Pan strip (P)">Pan</button>
+              <button class="tool-chip" data-tool="interval" type="button" title="Interval caliper (I)">Interval</button>
+              <button class="tool-chip" data-tool="rr" type="button" title="R-R rate (R)">R-R</button>
+              <button class="tool-chip" data-tool="march" type="button" title="March calipers (M)">March</button>
+              <button class="tool-chip" data-tool="amplitude" type="button" title="Voltage caliper (V)">mV</button>
+              <button class="tool-chip" data-tool="highlight" type="button" title="Highlight waveform (H)">Highlight</button>
+              <button class="tool-chip danger" id="quickDeleteBtn" type="button" title="Delete selected mark" disabled>Delete</button>
             </div>
             <div class="readout" id="readout">Upload an image or load the demo strip.</div>
           </div>

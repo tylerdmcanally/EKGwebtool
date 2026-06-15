@@ -397,6 +397,8 @@ h2 {
 
 .canvas-toolbar,
 .statusbar {
+  min-width: 0;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -404,6 +406,49 @@ h2 {
   padding: 10px 14px;
   background: #fff;
   border-bottom: 1px solid var(--line);
+}
+
+.workspace-tools {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tool-chip {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8faf9;
+  color: #1f2a26;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tool-chip:hover {
+  border-color: #9fb0aa;
+}
+
+.tool-chip.active {
+  background: #e4f3f0;
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.tool-chip.danger {
+  color: var(--danger);
+}
+
+.tool-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .statusbar {
@@ -423,6 +468,8 @@ h2 {
 
 .stage {
   position: relative;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--canvas-bg);
@@ -461,6 +508,7 @@ h2 {
 
 #stripCanvas {
   width: 100%;
+  max-width: 100%;
   height: 100%;
   min-height: 0;
   display: block;
@@ -555,8 +603,16 @@ h2 {
     flex-direction: column;
   }
 
+  .workspace-tools {
+    justify-content: flex-start;
+  }
+
   .readout {
     white-space: normal;
+  }
+
+  .statusbar {
+    align-items: flex-start;
   }
 
   .workspace-selection {

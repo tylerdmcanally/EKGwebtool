@@ -14,7 +14,8 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 - Highlight P waves, QRS complexes, ST segments, T waves, or custom areas.
 - Add notes, erase annotations, clear/undo, zoom, pan, and fit.
 - Keep the strip visible while the control panel scrolls independently on desktop.
-- Select marks from the strip or measurement list, then delete the selected mark from the panel or directly over the workspace.
+- Use the workspace quick tools or keyboard shortcuts to switch between selection, pan, interval, R-R, marching, voltage, and highlight modes without leaving the strip.
+- Select marks from the strip or measurement list, drag selected endpoints to adjust them, then delete the selected mark from the panel, workspace toolbar, or Delete/Backspace key.
 - Export an annotated PNG or one-page PDF report.
 - Share through the browser Web Share API when available; otherwise download the PDF and open an email draft.
 

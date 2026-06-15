@@ -34,6 +34,7 @@ const els = {
   workspaceSelectionBar: document.getElementById("workspaceSelectionBar"),
   workspaceSelectionText: document.getElementById("workspaceSelectionText"),
   workspaceDeleteBtn: document.getElementById("workspaceDeleteBtn"),
+  quickDeleteBtn: document.getElementById("quickDeleteBtn"),
   summary: document.getElementById("summary"),
   measurementList: document.getElementById("measurementList"),
   readout: document.getElementById("readout"),
@@ -207,6 +208,7 @@ els.downloadPdfBtn.addEventListener("click", downloadPdf);
 els.shareBtn.addEventListener("click", shareReport);
 els.deleteSelectedBtn.addEventListener("click", deleteSelectedAnnotation);
 els.workspaceDeleteBtn.addEventListener("click", deleteSelectedAnnotation);
+els.quickDeleteBtn.addEventListener("click", deleteSelectedAnnotation);
 
 els.measurementList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-delete-id]");
@@ -268,6 +270,7 @@ function updateSelectionUi() {
   if (!annotation) {
     els.selectionText.textContent = "No mark selected";
     els.deleteSelectedBtn.disabled = true;
+    els.quickDeleteBtn.disabled = true;
     els.workspaceSelectionText.textContent = "No mark selected";
     els.workspaceSelectionBar.classList.add("hidden");
     return;
@@ -276,6 +279,7 @@ function updateSelectionUi() {
   els.selectionText.textContent = label;
   els.workspaceSelectionText.textContent = label;
   els.deleteSelectedBtn.disabled = false;
+  els.quickDeleteBtn.disabled = false;
   els.workspaceSelectionBar.classList.remove("hidden");
 }
 
@@ -300,6 +304,12 @@ canvas.addEventListener("pointercancel", onPointerUp);
 canvas.addEventListener("wheel", onWheel, { passive: false });
 
 document.addEventListener("keydown", (event) => {
+  const shortcutTool = toolForShortcut(event.key);
+  if (shortcutTool && !event.metaKey && !event.ctrlKey && !event.altKey && !isEditingTarget(event.target) && !state.active) {
+    event.preventDefault();
+    setTool(shortcutTool);
+    return;
+  }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
     if (isEditingTarget(event.target)) return;
     event.preventDefault();
@@ -324,6 +334,20 @@ document.addEventListener("keydown", (event) => {
 syncCalibrationFromInputs();
 render();
 updateMeasurements();
+
+function toolForShortcut(key) {
+  const map = {
+    s: "select",
+    p: "pan",
+    i: "interval",
+    r: "rr",
+    m: "march",
+    v: "amplitude",
+    h: "highlight",
+    n: "note"
+  };
+  return map[String(key || "").toLowerCase()] || null;
+}
 
 function setTool(tool) {
   state.selectedTool = tool;
@@ -818,7 +842,7 @@ function renderScene(targetCtx, view, width, height, options = {}) {
   }
 
   state.annotations.forEach((annotation) => drawAnnotation(targetCtx, annotation, view));
-  if (options.showActive && state.active && state.active.kind !== "pan") {
+  if (options.showActive && state.active && state.active.kind !== "pan" && state.active.kind !== "edit") {
     drawAnnotation(targetCtx, previewAnnotation(), view, true);
   }
 }
@@ -939,6 +963,10 @@ function drawMeasure(targetCtx, annotation, view, isPreview = false) {
   targetCtx.arc(start.x, start.y, isSelectedAnnotation(annotation) ? 5.5 : 4, 0, Math.PI * 2);
   targetCtx.arc(end.x, end.y, isSelectedAnnotation(annotation) ? 5.5 : 4, 0, Math.PI * 2);
   targetCtx.fill();
+  if (!isPreview && isSelectedAnnotation(annotation)) {
+    drawEditHandle(targetCtx, start, color);
+    drawEditHandle(targetCtx, end, color);
+  }
 
   drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(start, end), color);
   targetCtx.restore();
@@ -1030,6 +1058,10 @@ function drawMarchMeasure(targetCtx, annotation, view, isPreview = false) {
     targetCtx.arc(point.x, point.y, index < 2 ? 4 : 3, 0, Math.PI * 2);
     targetCtx.fill();
   });
+  if (!isPreview && isSelectedAnnotation(annotation)) {
+    drawEditHandle(targetCtx, first, color);
+    drawEditHandle(targetCtx, second, color);
+  }
 
   drawBubble(targetCtx, labelForAnnotation(annotation), midpoint(first, second), color);
   targetCtx.restore();
@@ -1056,6 +1088,8 @@ function drawHighlight(targetCtx, annotation, view, isPreview = false) {
     targetCtx.setLineDash([6, 4]);
     targetCtx.strokeRect(start.x - 3, start.y - 3, width + 6, height + 6);
     targetCtx.setLineDash([]);
+    drawEditHandle(targetCtx, start, colors.interval);
+    drawEditHandle(targetCtx, end, colors.interval);
   }
   drawBubble(targetCtx, annotation.label, { x: start.x + 8, y: start.y + 16 }, color);
   targetCtx.restore();
@@ -1077,8 +1111,21 @@ function drawNote(targetCtx, annotation, view) {
     targetCtx.beginPath();
     targetCtx.arc(point.x, point.y, 11, 0, Math.PI * 2);
     targetCtx.stroke();
+    drawEditHandle(targetCtx, point, colors.interval);
   }
   drawBubble(targetCtx, annotation.label, { x: point.x + 12, y: point.y - 10 }, colors.note);
+  targetCtx.restore();
+}
+
+function drawEditHandle(targetCtx, point, color) {
+  targetCtx.save();
+  targetCtx.fillStyle = "#ffffff";
+  targetCtx.strokeStyle = color;
+  targetCtx.lineWidth = 2;
+  targetCtx.beginPath();
+  targetCtx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+  targetCtx.fill();
+  targetCtx.stroke();
   targetCtx.restore();
 }
 
@@ -1153,6 +1200,16 @@ function onPointerDown(event) {
   const point = clampToImage(toImagePoint(event));
 
   if (tool === "select") {
+    const handle = findSelectedHandle(point);
+    if (handle) {
+      state.active = {
+        kind: "edit",
+        annotationId: handle.annotation.id,
+        handle: handle.handle
+      };
+      canvas.style.cursor = "grabbing";
+      return;
+    }
     const index = findAnnotationIndex(point);
     selectAnnotation(index >= 0 ? state.annotations[index].id : null);
     return;
@@ -1202,7 +1259,11 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
-  if (!state.active || !state.image) return;
+  if (!state.image) return;
+  if (!state.active) {
+    updateHoverCursor(clampToImage(toImagePoint(event)));
+    return;
+  }
 
   if (state.active.kind === "pan") {
     const dx = event.clientX - state.active.clientX;
@@ -1213,12 +1274,26 @@ function onPointerMove(event) {
     return;
   }
 
+  if (state.active.kind === "edit") {
+    updateEditedAnnotation(state.active, clampToImage(toImagePoint(event)));
+    render();
+    updateMeasurements();
+    return;
+  }
+
   state.active.end = clampToImage(toImagePoint(event));
   render();
 }
 
 function onPointerUp(event) {
   if (!state.active || !state.image) return;
+  if (state.active.kind === "edit") {
+    state.active = null;
+    canvas.style.cursor = "default";
+    render();
+    updateMeasurements();
+    return;
+  }
   if (state.active.kind === "pan") {
     state.active = null;
     canvas.style.cursor = state.selectedTool === "pan" ? "grab" : "crosshair";
@@ -1268,6 +1343,48 @@ function onPointerUp(event) {
 
   render();
   updateMeasurements();
+}
+
+function updateEditedAnnotation(active, point) {
+  const annotation = state.annotations.find((item) => item.id === active.annotationId);
+  if (!annotation) return;
+  if (active.handle === "point") {
+    annotation.point = point;
+    return;
+  }
+  if (active.handle === "start") {
+    annotation.start = point;
+    return;
+  }
+  if (active.handle === "end") {
+    annotation.end = point;
+  }
+}
+
+function findSelectedHandle(point) {
+  const annotation = selectedAnnotation();
+  if (!annotation) return null;
+  const threshold = 14 / state.view.scale;
+  if (annotation.kind === "note") {
+    return distance(point, annotation.point) <= threshold ? { annotation, handle: "point" } : null;
+  }
+  if (annotation.start && distance(point, annotation.start) <= threshold) {
+    return { annotation, handle: "start" };
+  }
+  if (annotation.end && distance(point, annotation.end) <= threshold) {
+    return { annotation, handle: "end" };
+  }
+  return null;
+}
+
+function updateHoverCursor(point) {
+  if (state.selectedTool !== "select") return;
+  if (findSelectedHandle(point)) {
+    canvas.style.cursor = "grab";
+    return;
+  }
+  const index = findAnnotationIndex(point);
+  canvas.style.cursor = index >= 0 ? "pointer" : "default";
 }
 
 function onWheel(event) {
