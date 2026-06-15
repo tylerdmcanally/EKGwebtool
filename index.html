@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EKG Caliper Studio</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f766e'/%3E%3Cpath d='M8 34h11l5-14 8 28 6-22 4 8h14' fill='none' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260615-cal-help">
-    <script src="app.js?v=20260615-cal-help" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260615-autogrid">
+    <script src="app.js?v=20260615-autogrid" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -72,6 +72,10 @@
               <input id="showGrid" type="checkbox" checked>
               <span>Show grid overlay</span>
             </label>
+            <div class="calibration-tools" role="toolbar" aria-label="Grid calibration tools">
+              <button class="tool-button" id="autoGridBtn" type="button">Auto-detect Grid</button>
+            </div>
+            <div class="calibration-summary" id="gridCalSummary">Use auto-detect first when the paper grid is visible. Confirm the overlay lines match the strip before measuring.</div>
             <div class="calibration-help" id="timeCalHelp">1. Pick recording speed. 2. Enter large boxes to trace. 3. Click Set Time Scale, then drag across that exact count.</div>
             <div class="two-column">
               <label class="field compact hidden" id="knownTimeField">

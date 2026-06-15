@@ -5,6 +5,7 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 ## First Pass Scope
 
 - Upload or drag-drop an EKG/rhythm strip image.
+- Auto-detect visible ECG paper grids and align the measurement overlay.
 - Set paper speed or use a known time marker on the strip to calibrate intervals.
 - Set gain for voltage measurement.
 - Show a grid overlay while measuring uploaded strips.
@@ -18,6 +19,8 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 ## Clinical Measurement Defaults
 
 The app defaults to 25 mm/s and 10 mm/mV. At 25 mm/s, one small 1 mm box is 40 ms and one large 5 mm box is 200 ms. At 10 mm/mV, one small vertical box is 0.1 mV. These defaults are editable because uploaded images may come from different paper speeds, gains, screenshots, or resized scans.
+
+Use **Auto-detect Grid** first when the ECG paper grid is visible. The app estimates horizontal and vertical small-box spacing from regular grid-line peaks in the image, then aligns the overlay. Confirm the overlay lines match the strip before measuring. If auto-detect cannot find a reliable grid, or if the image is telemetry without a visible grid, use manual time calibration.
 
 For interval calibration, use **Set Time Scale**. In the common path, choose **Standard speed (25/50 mm/s)**, confirm the recording speed, enter how many large boxes you will trace, then drag left-to-right across exactly that many large boxes. For telemetry or nonstandard strips, choose **Known time marker on strip**, enter the known duration and how many large boxes it covers, then drag across those same boxes. The app calculates `small boxes = large boxes * 5`, `px per small box = dragged pixels / small boxes`, and `ms per small box = known ms / small boxes`. For example, 400 ms across two large boxes is 400 ms across 10 small boxes, or 40 ms per small box, which derives 25 mm/s.
 

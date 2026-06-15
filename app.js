@@ -20,6 +20,8 @@ const els = {
   calibrationBoxes: document.getElementById("calibrationBoxes"),
   gridOpacity: document.getElementById("gridOpacity"),
   showGrid: document.getElementById("showGrid"),
+  autoGridBtn: document.getElementById("autoGridBtn"),
+  gridCalSummary: document.getElementById("gridCalSummary"),
   marchSteps: document.getElementById("marchSteps"),
   knownTimeField: document.getElementById("knownTimeField"),
   knownTimeMs: document.getElementById("knownTimeMs"),
@@ -165,6 +167,7 @@ els.lockBoxes.addEventListener("change", () => {
 els.calibrationBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.gridOpacity.addEventListener("input", syncCalibrationFromInputs);
 els.showGrid.addEventListener("change", syncCalibrationFromInputs);
+els.autoGridBtn.addEventListener("click", autoDetectGrid);
 els.marchSteps.addEventListener("input", render);
 els.knownTimeMs.addEventListener("input", syncCalibrationFromInputs);
 els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
@@ -274,6 +277,9 @@ function syncCalibrationFromInputs() {
   state.calibration.gain = els.gain.value === "custom"
     ? numberFromInput(els.customGain, 10)
     : Number(els.gain.value);
+  if (knownMode) {
+    state.calibration.paperSpeed = timeCalibrationSettings().paperSpeed;
+  }
   state.calibration.calibrationBoxes = numberFromInput(els.calibrationBoxes, 5);
   state.calibration.gridOpacity = Number(els.gridOpacity.value);
   state.calibration.showGrid = els.showGrid.checked;
@@ -303,12 +309,246 @@ function getTimeLargeBoxes() {
 function updateTimeCalibrationSummary() {
   const data = timeCalibrationSettings();
   if (els.timeCalMode.value === "known") {
-    els.timeCalHelp.textContent = "1. Enter known duration. 2. Count the large boxes it covers. 3. Click Set Time Scale, then drag across those same boxes.";
+    els.timeCalHelp.textContent = "Enter the known duration and box count. With an aligned grid, no drag is needed; use Set Time Scale only if the overlay is off.";
     els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes = ${round(data.knownMs, 0)} ms (${round(data.paperSpeed, 2)} mm/s effective).`;
     return;
   }
-  els.timeCalHelp.textContent = "1. Pick recording speed. 2. Enter large boxes to trace. 3. Click Set Time Scale, then drag across that exact count.";
+  els.timeCalHelp.textContent = "Auto-detect the grid first. If the overlay is off, enter a large-box count and use Set Time Scale manually.";
   els.timeCalSummary.textContent = `Calibration target: ${round(data.largeBoxes, 2)} large boxes at ${round(data.paperSpeed, 2)} mm/s = ${round(data.knownMs, 0)} ms.`;
+}
+
+function autoDetectGrid() {
+  if (!state.image) {
+    setStatus("Load an image before auto-detecting the grid.");
+    return;
+  }
+
+  const result = detectEcgGrid(state.image);
+  if (!result) {
+    els.gridCalSummary.textContent = "Grid not detected. Use Set Time Scale manually on a clearly visible box span.";
+    setStatus("Could not auto-detect a reliable grid. Use Set Time Scale manually.");
+    return;
+  }
+
+  const normalizedSpacing = normalizeDetectedGridSpacing(result.x.spacing, result.y.spacing);
+  state.calibration.pxPerSmallX = normalizedSpacing.x;
+  state.calibration.pxPerSmallY = normalizedSpacing.y;
+  state.calibration.originX = result.x.origin;
+  state.calibration.originY = result.y.origin;
+  state.calibration.showGrid = true;
+  els.boxPxX.value = round(normalizedSpacing.x, 2);
+  els.boxPxY.value = round(normalizedSpacing.y, 2);
+  els.showGrid.checked = true;
+
+  const confidenceLabel = result.confidence >= 0.5 ? "high confidence" : "review needed";
+  els.gridCalSummary.textContent = `Grid detected (${confidenceLabel}). Confirm the overlay lines match the small boxes before measuring.`;
+  setStatus("Auto-detected the grid. Confirm overlay alignment before measuring.");
+  render();
+  updateMeasurements();
+}
+
+function detectEcgGrid(image) {
+  // Best-effort detector: find repeating red/gray grid-line peaks in image-space projections.
+  const maxSide = 1400;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const width = Math.max(24, Math.round(image.width * scale));
+  const height = Math.max(24, Math.round(image.height * scale));
+  const source = document.createElement("canvas");
+  source.width = width;
+  source.height = height;
+  const sourceCtx = source.getContext("2d", { willReadFrequently: true });
+  sourceCtx.imageSmoothingEnabled = true;
+  sourceCtx.drawImage(image, 0, 0, width, height);
+  const pixels = sourceCtx.getImageData(0, 0, width, height).data;
+  const xProfile = new Float64Array(width);
+  const yProfile = new Float64Array(height);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      const r = pixels[offset];
+      const g = pixels[offset + 1];
+      const b = pixels[offset + 2];
+      const score = gridPixelScore(r, g, b);
+      xProfile[x] += score;
+      yProfile[y] += score;
+    }
+  }
+
+  normalizeProfile(xProfile, height);
+  normalizeProfile(yProfile, width);
+  const xAxis = estimateGridAxis(xProfile);
+  const yAxis = estimateGridAxis(yProfile);
+  if (!xAxis || !yAxis) return null;
+
+  const confidence = Math.min(xAxis.confidence, yAxis.confidence);
+  if (confidence < 0.06) return null;
+
+  return {
+    confidence,
+    x: {
+      spacing: xAxis.period / scale,
+      origin: xAxis.phase / scale
+    },
+    y: {
+      spacing: yAxis.period / scale,
+      origin: yAxis.phase / scale
+    }
+  };
+}
+
+function normalizeDetectedGridSpacing(xSpacing, ySpacing) {
+  if (!Number.isFinite(xSpacing) || !Number.isFinite(ySpacing) || xSpacing <= 0 || ySpacing <= 0) {
+    return { x: xSpacing, y: ySpacing };
+  }
+
+  const ratio = ySpacing / xSpacing;
+  if (ratio > 0.85 && ratio < 1.18) {
+    const average = (xSpacing + ySpacing) / 2;
+    return { x: average, y: average };
+  }
+  if (ratio < 0.65 || ratio > 1.55) {
+    return { x: xSpacing, y: xSpacing };
+  }
+  return { x: xSpacing, y: ySpacing };
+}
+
+function gridPixelScore(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const brightness = (r + g + b) / 3;
+  const redBias = r - (g + b) / 2;
+  const pinkLine = Math.max(0, redBias - 3) * 1.4;
+  const grayLine = max - min < 32 ? Math.max(0, 238 - brightness) * 0.16 : 0;
+  return pinkLine + grayLine;
+}
+
+function normalizeProfile(profile, divisor) {
+  for (let index = 0; index < profile.length; index += 1) {
+    profile[index] /= divisor;
+  }
+}
+
+function estimateGridAxis(profile) {
+  const smoothed = smoothProfile(profile, 1);
+  const baseline = quantile(Array.from(smoothed), 0.35);
+  const signal = smoothed.map((value) => Math.max(0, value - baseline));
+  const total = signal.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return null;
+
+  const minPeriod = 4;
+  const maxPeriod = Math.min(70, Math.floor(signal.length / 4));
+  let best = null;
+  for (let period = minPeriod; period <= maxPeriod; period += 1) {
+    const fit = bestPhaseForPeriod(signal, period, total);
+    if (!best || fit.score > best.score) {
+      best = { period, ...fit };
+    }
+  }
+
+  if (!best) return null;
+  const refined = refinePeriod(signal, best.period, best.phase, total);
+  if (refined && (refined.score > best.score || refined.period < best.period)) {
+    return refined;
+  }
+  return best;
+}
+
+function bestPhaseForPeriod(signal, period, total) {
+  let best = { phase: 0, score: 0, confidence: 0 };
+  for (let phase = 0; phase < period; phase += 1) {
+    const fit = gridFitScore(signal, period, phase, total);
+    if (fit.score > best.score) {
+      best = { phase, ...fit };
+    }
+  }
+  return best;
+}
+
+function gridFitScore(signal, period, phase, total) {
+  let lineSum = 0;
+  let lineCount = 0;
+  let gapSum = 0;
+  let gapCount = 0;
+  const lineRadius = Math.max(1, Math.round(period * 0.08));
+  const gapStart = Math.max(lineRadius + 1, Math.floor(period * 0.32));
+
+  for (let index = 0; index < signal.length; index += 1) {
+    const distance = phaseDistance(index, phase, period);
+    if (distance <= lineRadius) {
+      lineSum += signal[index];
+      lineCount += 1;
+    } else if (distance >= gapStart) {
+      gapSum += signal[index];
+      gapCount += 1;
+    }
+  }
+
+  if (!lineCount || !gapCount) return { score: 0, confidence: 0 };
+  const lineAvg = lineSum / lineCount;
+  const gapAvg = gapSum / gapCount;
+  const contrast = Math.max(0, (lineAvg - gapAvg) / (lineAvg + gapAvg + 0.0001));
+  const energy = lineSum / (total + 0.0001);
+  const expectedLines = Math.max(1, Math.floor(signal.length / period));
+  const coverage = Math.min(1, expectedLines / 8);
+  const confidence = contrast * Math.min(1, energy * 2.4) * coverage;
+  return {
+    score: confidence,
+    confidence
+  };
+}
+
+function refinePeriod(signal, period, phase, total) {
+  let best = { period, phase, ...gridFitScore(signal, period, phase, total) };
+  const candidates = [period / 5, period / 2, period * 2, period * 5]
+    .map((value) => Math.round(value))
+    .filter((value) => value >= 4 && value <= Math.min(70, Math.floor(signal.length / 4)));
+
+  candidates.forEach((candidate) => {
+    const fit = bestPhaseForPeriod(signal, candidate, total);
+    const subdivision = best.period >= 18 && candidate === Math.round(best.period / 5);
+    if (subdivision && candidate < best.period) {
+      best = {
+        period: candidate,
+        phase: fit.score > 0 ? fit.phase : best.phase % candidate,
+        score: Math.max(fit.score, best.score * 0.2),
+        confidence: Math.min(best.confidence * 0.45, Math.max(fit.confidence, 0.08))
+      };
+      return;
+    }
+    const threshold = subdivision ? 0.12 : 0.72;
+    if (fit.score >= best.score * threshold && candidate < best.period) {
+      best = { period: candidate, ...fit };
+    }
+  });
+  return best;
+}
+
+function smoothProfile(profile, radius) {
+  return Array.from(profile, (_value, index) => {
+    let sum = 0;
+    let count = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const next = index + offset;
+      if (next >= 0 && next < profile.length) {
+        sum += profile[next];
+        count += 1;
+      }
+    }
+    return count ? sum / count : 0;
+  });
+}
+
+function phaseDistance(index, phase, period) {
+  const distance = Math.abs(((index - phase) % period + period) % period);
+  return Math.min(distance, period - distance);
+}
+
+function quantile(values, q) {
+  if (!values.length) return 0;
+  values.sort((a, b) => a - b);
+  const index = clamp(Math.floor((values.length - 1) * q), 0, values.length - 1);
+  return values[index];
 }
 
 function loadImageFile(file) {
