@@ -545,6 +545,41 @@ h2 {
   cursor: not-allowed;
 }
 
+.highlight-toolbar-control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.highlight-toolbar-control .tool-chip {
+  border-radius: 6px 0 0 6px;
+}
+
+.highlight-type-select {
+  min-height: 34px;
+  max-width: 132px;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  background: #fff;
+  color: #1f2a26;
+  padding: 5px 28px 5px 9px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.highlight-type-select:hover,
+.highlight-type-select:focus {
+  border-color: #9fb0aa;
+  outline: none;
+}
+
+.highlight-toolbar-control:focus-within .tool-chip,
+.highlight-toolbar-control:focus-within .highlight-type-select {
+  border-color: var(--accent);
+}
+
 .statusbar {
   border-bottom: 0;
   border-top: 1px solid var(--line);

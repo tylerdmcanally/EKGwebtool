@@ -191,14 +191,11 @@ els.marchSteps.addEventListener("input", render);
 els.knownTimeMs.addEventListener("input", syncCalibrationFromInputs);
 els.timeLargeBoxes.addEventListener("input", syncCalibrationFromInputs);
 els.highlightType.addEventListener("change", () => {
-  syncHighlightPicker();
-  render();
+  setHighlightType(els.highlightType.value, { activateTool: true });
 });
 els.highlightChoices.forEach((button) => {
   button.addEventListener("click", () => {
-    els.highlightType.value = button.dataset.highlightValue;
-    syncHighlightPicker();
-    render();
+    setHighlightType(button.dataset.highlightValue, { activateTool: true });
   });
 });
 
@@ -521,6 +518,9 @@ function setTool(tool) {
 }
 
 function statusForTool(tool) {
+  if (tool === "highlight") {
+    return `Highlight type: ${selectedHighlightMeta().label}. Drag a rectangle around the waveform or segment.`;
+  }
   const map = {
     select: "Click a mark to select it. Use Delete selected or the Delete key to remove it.",
     pan: "Drag the strip to reposition it. Use the zoom controls or mouse wheel to scale.",
@@ -532,7 +532,6 @@ function statusForTool(tool) {
     rr: "Drag between R waves to estimate rate from the R-R interval.",
     march: "Drag to set the caliper opening, then repeated ticks march out that same spacing.",
     amplitude: "Drag vertically to measure voltage in mV.",
-    highlight: "Drag a rectangle around a P wave, QRS, ST segment, T wave, or custom area.",
     note: "Click the strip to add a label.",
     erase: "Click an annotation to remove it."
   };
@@ -1950,6 +1949,18 @@ function syncHighlightPicker() {
     button.classList.toggle("active", isSelected);
     button.setAttribute("aria-checked", String(isSelected));
   });
+  if (state.selectedTool === "highlight") {
+    setStatus(statusForTool("highlight"));
+  }
+}
+
+function setHighlightType(value, options = {}) {
+  els.highlightType.value = value;
+  syncHighlightPicker();
+  if (options.activateTool) {
+    setTool("highlight");
+  }
+  render();
 }
 
 function labelForAnnotation(annotation) {
