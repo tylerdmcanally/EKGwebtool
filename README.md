@@ -1,10 +1,11 @@
 # EKG Caliper Studio
 
-A static, browser-based tool for reviewing ECG/EKG image files with calibrated calipers, waveform highlights, notes, and PNG/PDF export. It is designed for GitHub Pages and does not need a backend, drivers, or local installs for end users.
+A static, browser-based tool for reviewing ECG/EKG image and PDF files with calibrated calipers, waveform highlights, notes, and PNG/PDF export. It is designed for GitHub Pages and does not need a backend, drivers, or local installs for end users.
 
 ## First Pass Scope
 
-- Upload or drag-drop an EKG/rhythm strip image.
+- Upload or drag-drop an EKG/rhythm strip image or PDF.
+- Render uploaded PDF pages locally in the browser and choose pages from multi-page PDFs.
 - Use optional redaction tools to mask visible headers or identifiers before export.
 - Add a one-click top header redaction for common EKG printout demographics when needed.
 - Auto-detect visible ECG paper grids on image load and align the measurement overlay.
@@ -24,7 +25,7 @@ A static, browser-based tool for reviewing ECG/EKG image files with calibrated c
 
 ## Privacy Handling
 
-The app is static and client-side: uploaded images are processed in the browser and are not sent to a server by this site. Uploaded source filenames are not included in generated reports, and exported files use a generic `ekg-report` name.
+The app is static and client-side: uploaded images and PDFs are processed in the browser and are not sent to a server by this site. Uploaded source filenames are not included in generated reports, and exported files use a generic `ekg-report` name.
 
 The redaction drawer is collapsed by default for internal VA use. Use **Redact area** to draw black masks over any visible header or identifier you do not want in an export. **Block top header** adds a quick full-width mask over the common demographics area. Redactions are included in PNG, PDF, and share exports. **Apply redactions** bakes active masks into the working image and removes the editable mask layer.
 
@@ -49,10 +50,15 @@ ECG interpretation is broader than caliper measurement. A systematic review usua
 ## Limitations
 
 - No uploaded image is stored or shared by the site. Sharing is file-based through the user's browser.
+- Uploaded PDFs are rendered into an image page before measurement; annotations apply to the selected rendered page.
 - PHI redaction is manual. The app does not certify HIPAA de-identification and cannot guarantee that all identifiers are removed.
 - Camera perspective, skew, and nonuniform resizing can affect measurements. Use the calibration tool on the actual image before measuring.
 - The app assumes a straight horizontal time axis and vertical voltage axis.
 - This is for education, review, and documentation only. It is not a diagnostic medical device or a replacement for clinician interpretation.
+
+## Third-Party Runtime Assets
+
+- PDF upload support vendors Mozilla PDF.js prebuilt modules in `vendor/pdfjs/` under the Apache 2.0 license. These files are served with the site so PDF rendering does not require a runtime CDN.
 
 ## Reference Points Used
 

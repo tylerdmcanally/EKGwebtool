@@ -4,6 +4,10 @@ const ctx = canvas.getContext("2d");
 const els = {
   imageInput: document.getElementById("imageInput"),
   demoBtn: document.getElementById("demoBtn"),
+  pdfPageControls: document.getElementById("pdfPageControls"),
+  pdfPageSelect: document.getElementById("pdfPageSelect"),
+  pdfPrevPageBtn: document.getElementById("pdfPrevPageBtn"),
+  pdfNextPageBtn: document.getElementById("pdfNextPageBtn"),
   privacySummary: document.getElementById("privacySummary"),
   headerRedactBtn: document.getElementById("headerRedactBtn"),
   applyRedactionsBtn: document.getElementById("applyRedactionsBtn"),
@@ -79,6 +83,12 @@ const state = {
     offsetX: 0,
     offsetY: 0
   },
+  pdf: {
+    document: null,
+    page: 1,
+    pages: 0,
+    loading: false
+  },
   calibration: {
     paperSpeed: 25,
     gain: 10,
@@ -92,6 +102,9 @@ const state = {
     originY: 0
   }
 };
+
+let pdfJsPromise = null;
+let pdfRenderToken = 0;
 
 if ("ResizeObserver" in window) {
   const resizeObserver = new ResizeObserver(() => render());
@@ -109,7 +122,8 @@ document.querySelectorAll("[data-tool]").forEach((button) => {
 els.imageInput.addEventListener("change", (event) => {
   const file = event.target.files && event.target.files[0];
   if (file) {
-    loadImageFile(file);
+    loadUploadedFile(file);
+    event.target.value = "";
   }
 });
 
@@ -129,12 +143,23 @@ els.imageInput.addEventListener("change", (event) => {
 els.stage.addEventListener("drop", (event) => {
   event.preventDefault();
   const file = event.dataTransfer.files && event.dataTransfer.files[0];
-  if (file && file.type.startsWith("image/")) {
-    loadImageFile(file);
+  if (file && isSupportedUpload(file)) {
+    loadUploadedFile(file);
+  } else if (file) {
+    setStatus("Drop an EKG image or PDF file.");
   }
 });
 
 els.demoBtn.addEventListener("click", loadDemoStrip);
+els.pdfPageSelect.addEventListener("change", () => {
+  renderPdfPage(Number(els.pdfPageSelect.value));
+});
+els.pdfPrevPageBtn.addEventListener("click", () => {
+  renderPdfPage(state.pdf.page - 1);
+});
+els.pdfNextPageBtn.addEventListener("click", () => {
+  renderPdfPage(state.pdf.page + 1);
+});
 els.headerRedactBtn.addEventListener("click", addHeaderRedaction);
 els.applyRedactionsBtn.addEventListener("click", applyRedactionsToImage);
 els.clearRedactionsBtn.addEventListener("click", clearRedactions);
@@ -987,32 +1012,184 @@ function quantile(values, q) {
   return values[index];
 }
 
+function isSupportedUpload(file) {
+  return isPdfFile(file) || isImageFile(file);
+}
+
+function isPdfFile(file) {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+}
+
+function isImageFile(file) {
+  return (file.type && file.type.startsWith("image/")) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(file.name || "");
+}
+
+function loadUploadedFile(file) {
+  if (isPdfFile(file)) {
+    loadPdfFile(file);
+    return;
+  }
+  if (isImageFile(file)) {
+    loadImageFile(file);
+    return;
+  }
+  setStatus("Select an EKG image or PDF file.");
+}
+
 function loadImageFile(file) {
+  clearPdfState();
   const reader = new FileReader();
-  reader.onload = () => loadImageSource(String(reader.result), "uploaded-ekg-strip");
+  reader.onload = () => {
+    loadImageSource(String(reader.result), "uploaded-ekg-strip").catch(() => {});
+  };
+  reader.onerror = () => setStatus("The selected image could not be read.");
   reader.readAsDataURL(file);
+}
+
+async function loadPdfFile(file) {
+  clearPdfState();
+  setStatus("Loading PDF...");
+
+  try {
+    const pdfjsLib = await loadPdfJs();
+    const data = new Uint8Array(await file.arrayBuffer());
+    const pdfDocument = await pdfjsLib.getDocument({ data }).promise;
+    state.pdf.document = pdfDocument;
+    state.pdf.page = 1;
+    state.pdf.pages = pdfDocument.numPages;
+    populatePdfPageSelect();
+    updatePdfControls();
+    await renderPdfPage(1);
+  } catch (error) {
+    console.error(error);
+    clearPdfState();
+    setStatus("The selected PDF could not be loaded.");
+  }
+}
+
+function loadPdfJs() {
+  if (!pdfJsPromise) {
+    pdfJsPromise = import("./vendor/pdfjs/pdf.mjs").then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdfjs/pdf.worker.mjs", window.location.href).toString();
+      return pdfjsLib;
+    });
+  }
+  return pdfJsPromise;
+}
+
+async function renderPdfPage(pageNumber) {
+  const pdfDocument = state.pdf.document;
+  if (!pdfDocument) return;
+
+  const nextPage = Math.round(clamp(pageNumber, 1, state.pdf.pages));
+  const token = ++pdfRenderToken;
+  state.pdf.loading = true;
+  updatePdfControls();
+  setStatus(`Rendering PDF page ${nextPage} of ${state.pdf.pages}...`);
+
+  try {
+    const page = await pdfDocument.getPage(nextPage);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = pdfRenderScale(baseViewport.width, baseViewport.height);
+    const viewport = page.getViewport({ scale });
+    const pdfCanvas = document.createElement("canvas");
+    pdfCanvas.width = Math.max(1, Math.floor(viewport.width));
+    pdfCanvas.height = Math.max(1, Math.floor(viewport.height));
+    const pdfCtx = pdfCanvas.getContext("2d", { alpha: false });
+    pdfCtx.fillStyle = "#ffffff";
+    pdfCtx.fillRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+    await page.render({ canvasContext: pdfCtx, viewport }).promise;
+    if (token !== pdfRenderToken) return;
+
+    state.pdf.page = nextPage;
+    els.pdfPageSelect.value = String(nextPage);
+    await loadImageSource(pdfCanvas.toDataURL("image/png"), `uploaded-pdf page ${nextPage}`);
+    setStatus(`PDF page ${nextPage} loaded. Confirm grid alignment before measuring.`);
+  } catch (error) {
+    console.error(error);
+    setStatus("The selected PDF page could not be rendered.");
+  } finally {
+    if (token === pdfRenderToken) {
+      state.pdf.loading = false;
+      updatePdfControls();
+    }
+  }
+}
+
+function pdfRenderScale(width, height) {
+  const targetWidth = 2200;
+  const maxPixels = 5500000;
+  const widthScale = targetWidth / Math.max(1, width);
+  const pixelScale = Math.sqrt(maxPixels / Math.max(1, width * height));
+  return clamp(Math.min(widthScale, pixelScale), 1.5, 4);
+}
+
+function populatePdfPageSelect() {
+  els.pdfPageSelect.innerHTML = "";
+  for (let page = 1; page <= state.pdf.pages; page += 1) {
+    const option = document.createElement("option");
+    option.value = String(page);
+    option.textContent = `Page ${page} of ${state.pdf.pages}`;
+    els.pdfPageSelect.append(option);
+  }
+  els.pdfPageSelect.value = String(state.pdf.page);
+}
+
+function clearPdfState() {
+  pdfRenderToken += 1;
+  if (state.pdf.document) {
+    try {
+      const destroyed = state.pdf.document.destroy();
+      if (destroyed && typeof destroyed.catch === "function") {
+        destroyed.catch(() => {});
+      }
+    } catch (_error) {
+      // Nothing to clean up if PDF.js has already torn down this document.
+    }
+  }
+  state.pdf.document = null;
+  state.pdf.page = 1;
+  state.pdf.pages = 0;
+  state.pdf.loading = false;
+  els.pdfPageSelect.innerHTML = "";
+  updatePdfControls();
+}
+
+function updatePdfControls() {
+  const hasPdf = Boolean(state.pdf.document);
+  els.pdfPageControls.classList.toggle("hidden", !hasPdf);
+  els.pdfPageSelect.disabled = !hasPdf || state.pdf.loading;
+  els.pdfPrevPageBtn.disabled = !hasPdf || state.pdf.loading || state.pdf.page <= 1;
+  els.pdfNextPageBtn.disabled = !hasPdf || state.pdf.loading || state.pdf.page >= state.pdf.pages;
 }
 
 function loadImageSource(src, name) {
   const image = new Image();
-  image.onload = () => {
-    state.image = image;
-    state.imageName = name || "ekg-strip";
-    state.annotations = [];
-    state.nextId = 1;
-    state.selectedAnnotationId = null;
-    resetImageGridCalibration();
-    els.emptyState.classList.add("hidden");
-    fitImage();
-    autoDetectGrid({ source: "load" });
-    updatePrivacyUi();
-    updateMeasurements();
-  };
-  image.onerror = () => setStatus("The selected image could not be loaded.");
-  image.src = src;
+  return new Promise((resolve, reject) => {
+    image.onload = () => {
+      state.image = image;
+      state.imageName = name || "ekg-strip";
+      state.annotations = [];
+      state.nextId = 1;
+      state.selectedAnnotationId = null;
+      resetImageGridCalibration();
+      els.emptyState.classList.add("hidden");
+      fitImage();
+      autoDetectGrid({ source: "load" });
+      updatePrivacyUi();
+      updateMeasurements();
+      resolve(image);
+    };
+    image.onerror = () => {
+      setStatus("The selected image could not be loaded.");
+      reject(new Error("Image load failed"));
+    };
+    image.src = src;
+  });
 }
 
 function loadDemoStrip() {
+  clearPdfState();
   const demo = document.createElement("canvas");
   const dctx = demo.getContext("2d");
   const small = 16;
@@ -1045,7 +1222,7 @@ function loadDemoStrip() {
   state.calibration.originY = 0;
   els.boxPxX.value = small;
   els.boxPxY.value = small;
-  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip");
+  loadImageSource(demo.toDataURL("image/png"), "demo-rhythm-strip").catch(() => {});
 }
 
 function drawDemoGrid(dctx, width, height, small) {
